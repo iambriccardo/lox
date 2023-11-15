@@ -1,13 +1,28 @@
-package com.craftinginterpreters.lox.ast.visitors;
+package com.craftinginterpreters.lox.runtime;
 
 import com.craftinginterpreters.lox.Lox;
 import com.craftinginterpreters.lox.ast.Expr;
+import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
+
+import java.util.List;
 
 import static com.craftinginterpreters.lox.lexer.TokenType.COLON;
 import static com.craftinginterpreters.lox.lexer.TokenType.QUESTION_MARK;
 
-public class Interpreter implements Expr.Visitor<Object> {
+public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
+
+    private Environment environment = new Environment();
+
+    public void interpret(List<Stmt> statements) {
+        try {
+            for (Stmt stmt : statements) {
+                execute(stmt);
+            }
+        } catch (RuntimeError error) {
+            Lox.runtimeError(error);
+        }
+    }
 
     public void interpret(Expr expression) {
         try {
@@ -18,7 +33,11 @@ public class Interpreter implements Expr.Visitor<Object> {
         }
     }
 
-    private Object evaluate(Expr expr) {
+    public void execute(Stmt stmt) {
+        stmt.accept(this);
+    }
+
+    public Object evaluate(Expr expr) {
         return expr.accept(this);
     }
 
@@ -59,6 +78,35 @@ public class Interpreter implements Expr.Visitor<Object> {
         }
 
         return object.toString();
+    }
+
+    @Override
+    public Object visitExpressionStmt(Stmt.Expression stmt) {
+        evaluate(stmt.expression);
+        return null;
+    }
+
+    @Override
+    public Object visitPrintStmt(Stmt.Print stmt) {
+        Object value = evaluate(stmt.expression);
+        System.out.println(stringify(value));
+        return null;
+    }
+
+    @Override
+    public Object visitVarStmt(Stmt.Var stmt) {
+        Object value = null;
+        if (stmt.initializer != null) {
+            value = evaluate(stmt.initializer);
+        }
+
+        environment.define(stmt.name.lexeme, value);
+        return null;
+    }
+
+    @Override
+    public Object visitVariableExpr(Expr.Variable expr) {
+        return environment.get(expr.name);
     }
 
     @Override

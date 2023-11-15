@@ -1,11 +1,11 @@
 package com.craftinginterpreters.lox;
 
-import com.craftinginterpreters.lox.ast.Expr;
-import com.craftinginterpreters.lox.ast.visitors.Interpreter;
+import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Scanner;
 import com.craftinginterpreters.lox.lexer.Token;
 import com.craftinginterpreters.lox.lexer.TokenType;
 import com.craftinginterpreters.lox.parser.Parser;
+import com.craftinginterpreters.lox.runtime.Interpreter;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -57,12 +57,12 @@ public class Lox {
         List<Token> tokens = scanner.scanTokens();
 
         Parser parser = new Parser(tokens);
-        Expr expr = parser.parse();
+        List<Stmt> statements = parser.parse();
 
         // Stop if there was a syntax error.
         if (hadError) return;
 
-        interpreter.interpret(expr);
+        interpreter.interpret(statements);
     }
 
     public static void error(int line, String message) {

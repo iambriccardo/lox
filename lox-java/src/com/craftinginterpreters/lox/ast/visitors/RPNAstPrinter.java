@@ -45,4 +45,9 @@ public class RPNAstPrinter implements Expr.Visitor<String> {
     public String visitTernaryExpr(Expr.Ternary expr) {
         return rpnize(expr.operator1.lexeme + " " + expr.operator2.lexeme, expr.expr1, expr.expr2, expr.expr3);
     }
+
+    @Override
+    public String visitVariableExpr(Expr.Variable expr) {
+        return null;
+    }
 }
