@@ -50,4 +50,9 @@ public class RPNAstPrinter implements Expr.Visitor<String> {
     public String visitVariableExpr(Expr.Variable expr) {
         return null;
     }
+
+    @Override
+    public String visitAssignExpr(Expr.Assign expr) {
+        return null;
+    }
 }
