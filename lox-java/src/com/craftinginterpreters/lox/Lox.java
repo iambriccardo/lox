@@ -1,5 +1,6 @@
 package com.craftinginterpreters.lox;
 
+import com.craftinginterpreters.lox.ast.Expr;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Scanner;
 import com.craftinginterpreters.lox.lexer.Token;
@@ -62,7 +63,23 @@ public class Lox {
         // Stop if there was a syntax error.
         if (hadError) return;
 
-        interpreter.interpret(statements);
+        Expr singleExpression = isSingleExpression(statements);
+        if (singleExpression != null) {
+            interpreter.interpret(singleExpression);
+        } else {
+            interpreter.interpret(statements);
+        }
+    }
+
+    private static Expr isSingleExpression(List<Stmt> statements) {
+        if (!statements.isEmpty()) {
+            Stmt stmt = statements.getFirst();
+            if (stmt instanceof Stmt.Expression) {
+                return ((Stmt.Expression) stmt).expression;
+            }
+        }
+
+        return null;
     }
 
     public static void error(int line, String message) {

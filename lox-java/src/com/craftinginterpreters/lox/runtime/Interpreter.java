@@ -12,7 +12,7 @@ import static com.craftinginterpreters.lox.lexer.TokenType.QUESTION_MARK;
 
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
-    private final Environment environment = new Environment();
+    private Environment environment = new Environment(null);
 
     public void interpret(List<Stmt> statements) {
         try {
@@ -84,6 +84,25 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public Object visitExpressionStmt(Stmt.Expression stmt) {
         evaluate(stmt.expression);
         return null;
+    }
+
+    @Override
+    public Object visitBlockStmt(Stmt.Block stmt) {
+        executeBlock(stmt.statements, new Environment(environment));
+        return null;
+    }
+
+    void executeBlock(List<Stmt> statements, Environment environment) {
+        Environment previous = this.environment;
+        try {
+            this.environment = environment;
+
+            for (Stmt statement : statements) {
+                execute(statement);
+            }
+        } finally {
+            this.environment = previous;
+        }
     }
 
     @Override
