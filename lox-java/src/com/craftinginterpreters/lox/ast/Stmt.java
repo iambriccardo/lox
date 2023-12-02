@@ -51,6 +51,7 @@ public abstract class Stmt {
         public final Expr condition;
         public final Stmt thenBranch;
         public final Stmt elseBranch;
+
         public If(Expr condition, Stmt thenBranch, Stmt elseBranch) {
             this.condition = condition;
             this.thenBranch = thenBranch;
@@ -79,6 +80,7 @@ public abstract class Stmt {
     public static class Var extends Stmt {
         public final Token name;
         public final Expr initializer;
+
         public Var(Token name, Expr initializer) {
             this.name = name;
             this.initializer = initializer;
@@ -93,6 +95,7 @@ public abstract class Stmt {
     public static class While extends Stmt {
         public final Expr condition;
         public final Stmt body;
+
         public While(Expr condition, Stmt body) {
             this.condition = condition;
             this.body = body;

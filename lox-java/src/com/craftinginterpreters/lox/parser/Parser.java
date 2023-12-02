@@ -16,6 +16,7 @@ public class Parser {
 
     private final List<Token> tokens;
     private int current = 0;
+    private boolean inEnclosedLoop = false;
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
@@ -56,8 +57,18 @@ public class Parser {
     private Stmt statement() {
         if (match(IF)) return ifStatement();
         if (match(PRINT)) return printStatement();
-        if (match(WHILE)) return whileStatement();
-        if (match(FOR)) return forStatement();
+        if (match(WHILE)) {
+            this.inEnclosedLoop = true;
+            Stmt whileStatement = whileStatement();
+            this.inEnclosedLoop = false;
+            return whileStatement;
+        }
+        if (match(FOR)) {
+            this.inEnclosedLoop = true;
+            Stmt forStatement = forStatement();
+            this.inEnclosedLoop = false;
+            return forStatement;
+        }
         if (match(LEFT_BRACE)) return new Stmt.Block(block());
 
         return expressionStatement();
@@ -167,7 +178,7 @@ public class Parser {
                 return new Expr.Assign(name, value);
             }
 
-            error(equals, "Invalid assignment target");
+            error(equals, "Invalid assignment target", true);
         }
 
         return expr;
@@ -217,7 +228,7 @@ public class Parser {
         if (!check(BANG_EQUAL, EQUAL_EQUAL)) {
             expr = comparison();
         } else {
-            error(peek(), "Binary expression missing left operand");
+            error(peek(), "Binary expression missing left operand", true);
         }
 
         while (match(BANG_EQUAL, EQUAL_EQUAL)) {
@@ -234,7 +245,7 @@ public class Parser {
         if (!check(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
             expr = term();
         } else {
-            error(peek(), "Binary expression missing left operand");
+            error(peek(), "Binary expression missing left operand", true);
         }
 
         while (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
@@ -251,7 +262,7 @@ public class Parser {
         if (!check(PLUS)) {
             expr = factor();
         } else {
-            error(peek(), "Binary expression missing left operand");
+            error(peek(), "Binary expression missing left operand", true);
         }
 
         while (match(MINUS, PLUS)) {
@@ -268,7 +279,7 @@ public class Parser {
         if (!check(SLASH, STAR)) {
             expr = unary();
         } else {
-            error(peek(), "Binary expression missing left operand");
+            error(peek(), "Binary expression missing left operand", true);
         }
 
         while (match(SLASH, STAR)) {
@@ -294,6 +305,12 @@ public class Parser {
         if (match(FALSE)) return new Expr.Literal(false);
         if (match(TRUE)) return new Expr.Literal(true);
         if (match(NIL)) return new Expr.Literal(null);
+        if (match(BREAK)) {
+            if (!this.inEnclosedLoop) {
+                throw error(previous(), "'break' can only be used inside loops", false);
+            }
+            return new Expr.Literal(Expr.Literal.BREAK);
+        }
 
         if (match(NUMBER, STRING)) {
             return new Expr.Literal(previous().literal);
@@ -315,7 +332,7 @@ public class Parser {
             return new Expr.Grouping(expr);
         }
 
-        throw error(peek(), "Expect expression.");
+        throw error(peek(), "Expect expression.", true);
     }
 
     private boolean match(TokenType... types) {
@@ -364,11 +381,11 @@ public class Parser {
     private Token consume(TokenType type, String message) {
         if (check(type)) return advance();
 
-        throw error(peek(), message);
+        throw error(peek(), message, true);
     }
 
-    private ParseError error(Token token, String message) {
-        Lox.error(token, message);
+    private ParseError error(Token token, String message, boolean critical) {
+        Lox.error(token, message, critical);
         return new ParseError();
     }
 

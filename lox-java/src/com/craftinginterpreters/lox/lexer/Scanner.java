@@ -30,6 +30,7 @@ public class Scanner {
         keywords.put("true", TRUE);
         keywords.put("var", VAR);
         keywords.put("while", WHILE);
+        keywords.put("break", BREAK);
     }
 
     private final String source;
@@ -118,7 +119,7 @@ public class Scanner {
                     }
 
                     if (isAtEnd()) {
-                        Lox.error(line, "Unterminated code comment.");
+                        Lox.error(line, "Unterminated code comment.", true);
                         break;
                     }
 
@@ -146,7 +147,7 @@ public class Scanner {
                 } else if (isAlpha(c)) {
                     identifier();
                 } else {
-                    Lox.error(line, "Unexpected character.");
+                    Lox.error(line, "Unexpected character.", true);
                 }
                 break;
         }
@@ -208,7 +209,7 @@ public class Scanner {
         }
 
         if (isAtEnd()) {
-            Lox.error(line, "Unterminated string.");
+            Lox.error(line, "Unterminated string.", true);
             return;
         }
 

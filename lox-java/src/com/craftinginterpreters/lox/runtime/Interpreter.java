@@ -14,11 +14,14 @@ import static com.craftinginterpreters.lox.lexer.TokenType.QUESTION_MARK;
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     private Environment environment = new Environment(null);
+    private boolean encounteredBreak = false;
 
     public void interpret(List<Stmt> statements) {
         try {
             for (Stmt stmt : statements) {
-                execute(stmt);
+                if (stmt != null) {
+                    execute(stmt);
+                }
             }
         } catch (RuntimeError error) {
             Lox.runtimeError(error);
@@ -138,6 +141,10 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public Object visitWhileStmt(Stmt.While stmt) {
         while (isTruthy(evaluate(stmt.condition))) {
             execute(stmt.body);
+            if (this.encounteredBreak) {
+                this.encounteredBreak = false;
+                break;
+            }
         }
         return null;
     }
@@ -229,6 +236,10 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     @Override
     public Object visitLiteralExpr(Expr.Literal expr) {
+        if (expr.value.equals(Expr.Literal.BREAK)) {
+            this.encounteredBreak = true;
+        }
+
         return expr.value;
     }
 
