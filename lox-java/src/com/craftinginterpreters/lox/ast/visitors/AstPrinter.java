@@ -57,4 +57,9 @@ public class AstPrinter implements Expr.Visitor<String> {
     public String visitAssignExpr(Expr.Assign expr) {
         return null;
     }
+
+    @Override
+    public String visitLogicalExpr(Expr.Logical expr) {
+        return null;
+    }
 }
