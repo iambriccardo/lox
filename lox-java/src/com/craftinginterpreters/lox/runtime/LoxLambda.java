@@ -1,7 +1,6 @@
 package com.craftinginterpreters.lox.runtime;
 
 import com.craftinginterpreters.lox.ast.Expr;
-import com.craftinginterpreters.lox.ast.Stmt;
 
 import java.util.List;
 
