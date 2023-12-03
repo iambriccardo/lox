@@ -1,16 +1,8 @@
-fun sayHi(outer, inner) {
-  for (var i = 0; i < outer; i = i + 1) {
-        for (var j = 0; j < inner; j = j + 1) {
-            if (j >= 5) {
-                break;
-            }
-
-            print(j);
-        }
-    }
-
-    return outer * inner;
+fun fib(n) {
+  if (n <= 1) return n;
+  return fib(n - 2) + fib(n - 1);
 }
 
-var result = sayHi(2, 20);
-print(result);
+for (var i = 0; i < 1000; i = i + 1) {
+  print fib(i);
+}
