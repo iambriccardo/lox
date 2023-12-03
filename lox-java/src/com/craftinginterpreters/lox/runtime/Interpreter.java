@@ -330,6 +330,11 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         return function.call(this, arguments);
     }
 
+    @Override
+    public Object visitLambdaExpr(Expr.Lambda expr) {
+        return new LoxLambda(expr, this.environment);
+    }
+
     public static class RuntimeError extends RuntimeException {
         public final Token token;
 

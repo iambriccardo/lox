@@ -359,14 +359,37 @@ public class Parser {
                     error(peek(), "Can't have more than 255 arguments.");
                 }
 
-                arguments.add(expression());
+                if (match(FUN)) {
+                    arguments.add(lambda());
+                } else {
+                    arguments.add(expression());
+                }
             } while (match(COMMA));
         }
 
-        Token paren = consume(RIGHT_PAREN,
-                "Expect ')' after arguments.");
+        Token paren = consume(RIGHT_PAREN, "Expect ')' after arguments.");
 
         return new Expr.Call(callee, paren, arguments);
+    }
+
+    private Expr.Lambda lambda() {
+        consume(LEFT_PAREN, "Expect '(' after lambda definition.");
+        List<Token> parameters = new ArrayList<>();
+        if (!check(RIGHT_PAREN)) {
+            do {
+                if (parameters.size() >= 255) {
+                    error(peek(), "Can't have more than 255 parameters.");
+                }
+
+                parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+            } while (match(COMMA));
+        }
+        consume(RIGHT_PAREN, "Expect ')' after parameters.");
+
+        consume(LEFT_BRACE, "Expect '{' before lambda body.");
+        List<Stmt> body = block();
+
+        return new Expr.Lambda(parameters, body);
     }
 
     private Expr primary() {
