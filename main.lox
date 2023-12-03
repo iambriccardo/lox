@@ -8,6 +8,9 @@ fun sayHi(outer, inner) {
             print(j);
         }
     }
+
+    return outer * inner;
 }
 
-sayHi(2, 20);
+var result = sayHi(2, 20);
+print(result);

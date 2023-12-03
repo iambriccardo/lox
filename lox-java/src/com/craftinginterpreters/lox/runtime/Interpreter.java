@@ -17,7 +17,6 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     public final Environment globals = new Environment(null);
     private Environment environment = globals;
-    private boolean encounteredBreak = false;
 
     public Interpreter() {
         this.globals.define("clock", new LoxCallable() {
@@ -125,9 +124,6 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
             for (Stmt statement : statements) {
                 execute(statement);
-                if (this.encounteredBreak) {
-                    break;
-                }
             }
         } finally {
             this.environment = previous;
@@ -165,9 +161,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     @Override
     public Object visitWhileStmt(Stmt.While stmt) {
         while (isTruthy(evaluate(stmt.condition))) {
-            execute(stmt.body);
-            if (this.encounteredBreak) {
-                this.encounteredBreak = false;
+            try {
+                execute(stmt.body);
+            } catch (Break b) {
                 break;
             }
         }
@@ -179,6 +175,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         LoxFunction function = new LoxFunction(stmt);
         environment.define(stmt.name.lexeme, function);
         return null;
+    }
+
+    @Override
+    public Void visitReturnStmt(Stmt.Return stmt) {
+        Object value = null;
+        if (stmt.value != null) value = evaluate(stmt.value);
+
+        throw new Return(value);
     }
 
     @Override
@@ -269,7 +273,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     @Override
     public Object visitLiteralExpr(Expr.Literal expr) {
         if (expr.value.equals(Constants.BREAK)) {
-            this.encounteredBreak = true;
+            throw new Break();
         }
 
         return expr.value;
