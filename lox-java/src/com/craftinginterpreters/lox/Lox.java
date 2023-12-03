@@ -18,7 +18,7 @@ import java.util.List;
 
 public class Lox {
     private static final Interpreter interpreter = new Interpreter();
-    private static boolean hadCriticalError = false;
+    private static boolean hadError = false;
     private static boolean hadRuntimeError = false;
 
     public static void main(String[] args) throws IOException {
@@ -36,7 +36,7 @@ public class Lox {
         byte[] bytes = Files.readAllBytes(Paths.get(path));
         run(new String(bytes, Charset.defaultCharset()));
 
-        if (hadCriticalError) System.exit(65);
+        if (hadError) System.exit(65);
         if (hadRuntimeError) System.exit(70);
     }
 
@@ -49,7 +49,7 @@ public class Lox {
             String line = reader.readLine();
             if (line == null) break;
             run(line);
-            hadCriticalError = false;
+            hadError = false;
         }
     }
 
@@ -60,9 +60,8 @@ public class Lox {
         Parser parser = new Parser(tokens);
         List<Stmt> statements = parser.parse();
 
-        // Stop if there was a critical error in the parsing process. Non-critical errors can move onto execution
-        // under the assumption that the synchronization step successfully found the next synchronization point.
-        if (hadCriticalError) return;
+        // Stop if there was an error in the parsing.
+        if (hadError) return;
 
         Expr singleExpression = isSingleExpression(statements);
         if (singleExpression != null) {
@@ -83,15 +82,15 @@ public class Lox {
         return null;
     }
 
-    public static void error(int line, String message, boolean critical) {
-        report(line, "", message, critical);
+    public static void error(int line, String message) {
+        report(line, "", message);
     }
 
-    public static void error(Token token, String message, boolean critical) {
+    public static void error(Token token, String message) {
         if (token.type == TokenType.EOF) {
-            report(token.line, " at end", message, critical);
+            report(token.line, " at end", message);
         } else {
-            report(token.line, " at '" + token.lexeme + "'", message, critical);
+            report(token.line, " at '" + token.lexeme + "'", message);
         }
     }
 
@@ -100,10 +99,8 @@ public class Lox {
         hadRuntimeError = true;
     }
 
-    private static void report(int line, String where, String message, boolean critical) {
-        System.err.println("[line " + line + "] " + (critical ? "Error" : "Warning") + where + ": " + message);
-        if (critical) {
-            hadCriticalError = true;
-        }
+    private static void report(int line, String where, String message) {
+        System.err.println("[line " + line + "] Error" + where + ": " + message);
+        hadError = true;
     }
 }

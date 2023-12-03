@@ -5,7 +5,7 @@ import com.craftinginterpreters.lox.lexer.Token;
 import java.util.HashMap;
 import java.util.Map;
 
-class Environment {
+public class Environment {
     private final Environment enclosing;
     private final Map<String, Object> values = new HashMap<>();
 

@@ -2,6 +2,8 @@ package com.craftinginterpreters.lox.ast;
 
 import com.craftinginterpreters.lox.lexer.Token;
 
+import java.util.List;
+
 public abstract class Expr {
     public abstract <R> R accept(Visitor<R> visitor);
 
@@ -11,6 +13,8 @@ public abstract class Expr {
         R visitBinaryExpr(Binary expr);
 
         R visitTernaryExpr(Ternary expr);
+
+        R visitCallExpr(Call expr);
 
         R visitGroupingExpr(Grouping expr);
 
@@ -26,7 +30,6 @@ public abstract class Expr {
     public static class Assign extends Expr {
         public final Token name;
         public final Expr value;
-
         public Assign(Token name, Expr value) {
             this.name = name;
             this.value = value;
@@ -42,7 +45,6 @@ public abstract class Expr {
         public final Expr left;
         public final Token operator;
         public final Expr right;
-
         public Binary(Expr left, Token operator, Expr right) {
             this.left = left;
             this.operator = operator;
@@ -61,7 +63,6 @@ public abstract class Expr {
         public final Expr expr2;
         public final Token operator2;
         public final Expr expr3;
-
         public Ternary(Expr expr1, Token operator1, Expr expr2, Token operator2, Expr expr3) {
             this.expr1 = expr1;
             this.operator1 = operator1;
@@ -73,6 +74,22 @@ public abstract class Expr {
         @Override
         public <R> R accept(Visitor<R> visitor) {
             return visitor.visitTernaryExpr(this);
+        }
+    }
+
+    public static class Call extends Expr {
+        public final Expr callee;
+        public final Token paren;
+        public final List<Expr> arguments;
+        public Call(Expr callee, Token paren, List<Expr> arguments) {
+            this.callee = callee;
+            this.paren = paren;
+            this.arguments = arguments;
+        }
+
+        @Override
+        public <R> R accept(Visitor<R> visitor) {
+            return visitor.visitCallExpr(this);
         }
     }
 
@@ -90,9 +107,6 @@ public abstract class Expr {
     }
 
     public static class Literal extends Expr {
-
-        public static final Object BREAK = new Object();
-
         public final Object value;
 
         public Literal(Object value) {
@@ -109,7 +123,6 @@ public abstract class Expr {
         public final Expr left;
         public final Token operator;
         public final Expr right;
-
         public Logical(Expr left, Token operator, Expr right) {
             this.left = left;
             this.operator = operator;
@@ -125,7 +138,6 @@ public abstract class Expr {
     public static class Unary extends Expr {
         public final Token operator;
         public final Expr right;
-
         public Unary(Token operator, Expr right) {
             this.operator = operator;
             this.right = right;

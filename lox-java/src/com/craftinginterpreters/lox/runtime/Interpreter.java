@@ -1,11 +1,13 @@
 package com.craftinginterpreters.lox.runtime;
 
 import com.craftinginterpreters.lox.Lox;
+import com.craftinginterpreters.lox.ast.Constants;
 import com.craftinginterpreters.lox.ast.Expr;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
 import com.craftinginterpreters.lox.lexer.TokenType;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.craftinginterpreters.lox.lexer.TokenType.COLON;
@@ -13,8 +15,28 @@ import static com.craftinginterpreters.lox.lexer.TokenType.QUESTION_MARK;
 
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
-    private Environment environment = new Environment(null);
+    public final Environment globals = new Environment(null);
+    private Environment environment = globals;
     private boolean encounteredBreak = false;
+
+    public Interpreter() {
+        this.globals.define("clock", new LoxCallable() {
+            @Override
+            public int arity() {
+                return 0;
+            }
+
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                return (double) System.currentTimeMillis() / 1000.0;
+            }
+
+            @Override
+            public String toString() {
+                return "<native fn>";
+            }
+        });
+    }
 
     public void interpret(List<Stmt> statements) {
         try {
@@ -103,6 +125,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
             for (Stmt statement : statements) {
                 execute(statement);
+                if (this.encounteredBreak) {
+                    break;
+                }
             }
         } finally {
             this.environment = previous;
@@ -146,6 +171,13 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
                 break;
             }
         }
+        return null;
+    }
+
+    @Override
+    public Void visitFunctionStmt(Stmt.Function stmt) {
+        LoxFunction function = new LoxFunction(stmt);
+        environment.define(stmt.name.lexeme, function);
         return null;
     }
 
@@ -236,7 +268,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     @Override
     public Object visitLiteralExpr(Expr.Literal expr) {
-        if (expr.value.equals(Expr.Literal.BREAK)) {
+        if (expr.value.equals(Constants.BREAK)) {
             this.encounteredBreak = true;
         }
 
@@ -270,6 +302,28 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         }
 
         return null;
+    }
+
+    @Override
+    public Object visitCallExpr(Expr.Call expr) {
+        Object callee = evaluate(expr.callee);
+
+        List<Object> arguments = new ArrayList<>();
+        for (Expr argument : expr.arguments) {
+            arguments.add(evaluate(argument));
+        }
+
+        if (!(callee instanceof LoxCallable function)) {
+            throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+        }
+
+        if (arguments.size() != function.arity()) {
+            throw new RuntimeError(expr.paren, "Expected " +
+                    function.arity() + " arguments but got " +
+                    arguments.size() + ".");
+        }
+
+        return function.call(this, arguments);
     }
 
     public static class RuntimeError extends RuntimeException {

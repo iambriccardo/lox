@@ -1,6 +1,7 @@
 package com.craftinginterpreters.lox.parser;
 
 import com.craftinginterpreters.lox.Lox;
+import com.craftinginterpreters.lox.ast.Constants;
 import com.craftinginterpreters.lox.ast.Expr;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
@@ -16,7 +17,7 @@ public class Parser {
 
     private final List<Token> tokens;
     private int current = 0;
-    private boolean inEnclosedLoop = false;
+    private int enclosedLoops = 0;
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
@@ -33,6 +34,7 @@ public class Parser {
 
     private Stmt declaration() {
         try {
+            if (match(FUN)) return function("function");
             if (match(VAR)) return varDeclaration();
 
             return statement();
@@ -40,6 +42,28 @@ public class Parser {
             synchronize();
             return null;
         }
+    }
+
+    private Stmt.Function function(String kind) {
+        Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
+
+        consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+        List<Token> parameters = new ArrayList<>();
+        if (!check(RIGHT_PAREN)) {
+            do {
+                if (parameters.size() >= 255) {
+                    error(peek(), "Can't have more than 255 parameters.");
+                }
+
+                parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+            } while (match(COMMA));
+        }
+        consume(RIGHT_PAREN, "Expect ')' after parameters.");
+
+        consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+        List<Stmt> body = block();
+
+        return new Stmt.Function(name, parameters, body);
     }
 
     private Stmt varDeclaration() {
@@ -58,15 +82,15 @@ public class Parser {
         if (match(IF)) return ifStatement();
         if (match(PRINT)) return printStatement();
         if (match(WHILE)) {
-            this.inEnclosedLoop = true;
+            this.enclosedLoops++;
             Stmt whileStatement = whileStatement();
-            this.inEnclosedLoop = false;
+            this.enclosedLoops--;
             return whileStatement;
         }
         if (match(FOR)) {
-            this.inEnclosedLoop = true;
+            this.enclosedLoops++;
             Stmt forStatement = forStatement();
-            this.inEnclosedLoop = false;
+            this.enclosedLoops--;
             return forStatement;
         }
         if (match(LEFT_BRACE)) return new Stmt.Block(block());
@@ -178,7 +202,7 @@ public class Parser {
                 return new Expr.Assign(name, value);
             }
 
-            error(equals, "Invalid assignment target", true);
+            error(equals, "Invalid assignment target");
         }
 
         return expr;
@@ -228,7 +252,7 @@ public class Parser {
         if (!check(BANG_EQUAL, EQUAL_EQUAL)) {
             expr = comparison();
         } else {
-            error(peek(), "Binary expression missing left operand", true);
+            error(peek(), "Binary expression missing left operand");
         }
 
         while (match(BANG_EQUAL, EQUAL_EQUAL)) {
@@ -245,7 +269,7 @@ public class Parser {
         if (!check(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
             expr = term();
         } else {
-            error(peek(), "Binary expression missing left operand", true);
+            error(peek(), "Binary expression missing left operand");
         }
 
         while (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
@@ -262,7 +286,7 @@ public class Parser {
         if (!check(PLUS)) {
             expr = factor();
         } else {
-            error(peek(), "Binary expression missing left operand", true);
+            error(peek(), "Binary expression missing left operand");
         }
 
         while (match(MINUS, PLUS)) {
@@ -279,7 +303,7 @@ public class Parser {
         if (!check(SLASH, STAR)) {
             expr = unary();
         } else {
-            error(peek(), "Binary expression missing left operand", true);
+            error(peek(), "Binary expression missing left operand");
         }
 
         while (match(SLASH, STAR)) {
@@ -298,7 +322,39 @@ public class Parser {
             return new Expr.Unary(operator, right);
         }
 
-        return primary();
+        return call();
+    }
+
+    private Expr call() {
+        Expr expr = primary();
+
+        while (true) {
+            if (match(LEFT_PAREN)) {
+                expr = finishCall(expr);
+            } else {
+                break;
+            }
+        }
+
+        return expr;
+    }
+
+    private Expr finishCall(Expr callee) {
+        List<Expr> arguments = new ArrayList<>();
+        if (!check(RIGHT_PAREN)) {
+            do {
+                if (arguments.size() >= 255) {
+                    error(peek(), "Can't have more than 255 arguments.");
+                }
+
+                arguments.add(expression());
+            } while (match(COMMA));
+        }
+
+        Token paren = consume(RIGHT_PAREN,
+                "Expect ')' after arguments.");
+
+        return new Expr.Call(callee, paren, arguments);
     }
 
     private Expr primary() {
@@ -306,10 +362,10 @@ public class Parser {
         if (match(TRUE)) return new Expr.Literal(true);
         if (match(NIL)) return new Expr.Literal(null);
         if (match(BREAK)) {
-            if (!this.inEnclosedLoop) {
-                throw error(previous(), "'break' can only be used inside loops", false);
+            if (this.enclosedLoops == 0) {
+                error(previous(), "'break' can only be used inside loops");
             }
-            return new Expr.Literal(Expr.Literal.BREAK);
+            return new Expr.Literal(Constants.BREAK);
         }
 
         if (match(NUMBER, STRING)) {
@@ -332,7 +388,7 @@ public class Parser {
             return new Expr.Grouping(expr);
         }
 
-        throw error(peek(), "Expect expression.", true);
+        throw error(peek(), "Expect expression.");
     }
 
     private boolean match(TokenType... types) {
@@ -381,11 +437,11 @@ public class Parser {
     private Token consume(TokenType type, String message) {
         if (check(type)) return advance();
 
-        throw error(peek(), message, true);
+        throw error(peek(), message);
     }
 
-    private ParseError error(Token token, String message, boolean critical) {
-        Lox.error(token, message, critical);
+    private ParseError error(Token token, String message) {
+        Lox.error(token, message);
         return new ParseError();
     }
 

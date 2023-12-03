@@ -1,0 +1,13 @@
+fun sayHi(outer, inner) {
+  for (var i = 0; i < outer; i = i + 1) {
+        for (var j = 0; j < inner; j = j + 1) {
+            if (j >= 5) {
+                break;
+            }
+
+            print(j);
+        }
+    }
+}
+
+sayHi(2, 20);
