@@ -7,6 +7,7 @@ import com.craftinginterpreters.lox.lexer.Token;
 import com.craftinginterpreters.lox.lexer.TokenType;
 import com.craftinginterpreters.lox.parser.Parser;
 import com.craftinginterpreters.lox.runtime.Interpreter;
+import com.craftinginterpreters.lox.runtime.Resolver;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -61,6 +62,12 @@ public class Lox {
         List<Stmt> statements = parser.parse();
 
         // Stop if there was an error in the parsing.
+        if (hadError) return;
+
+        Resolver resolver = new Resolver(interpreter);
+        resolver.resolve(statements);
+
+        // Stop if there was a resolution error.
         if (hadError) return;
 
         Expr singleExpression = isSingleExpression(statements);

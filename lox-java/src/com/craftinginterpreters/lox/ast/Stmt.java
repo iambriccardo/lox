@@ -20,6 +20,8 @@ public abstract class Stmt {
 
         R visitReturnStmt(Return stmt);
 
+        R visitBreakStmt(Break stmt);
+
         R visitVarStmt(Var stmt);
 
         R visitWhileStmt(While stmt);
@@ -107,6 +109,19 @@ public abstract class Stmt {
         @Override
         public <R> R accept(Visitor<R> visitor) {
             return visitor.visitReturnStmt(this);
+        }
+    }
+
+    public static class Break extends Stmt {
+        public final Token keyword;
+
+        public Break(Token keyword) {
+            this.keyword = keyword;
+        }
+
+        @Override
+        public <R> R accept(Visitor<R> visitor) {
+            return visitor.visitBreakStmt(this);
         }
     }
 

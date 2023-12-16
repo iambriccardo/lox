@@ -1,7 +1,6 @@
 package com.craftinginterpreters.lox.parser;
 
 import com.craftinginterpreters.lox.Lox;
-import com.craftinginterpreters.lox.ast.Constants;
 import com.craftinginterpreters.lox.ast.Expr;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
@@ -17,7 +16,7 @@ public class Parser {
 
     private final List<Token> tokens;
     private int current = 0;
-    private int enclosedLoops = 0;
+    private final int enclosedLoops = 0;
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
@@ -81,19 +80,10 @@ public class Parser {
     private Stmt statement() {
         if (match(IF)) return ifStatement();
         if (match(PRINT)) return printStatement();
+        if (match(BREAK)) return breakStatement();
         if (match(RETURN)) return returnStatement();
-        if (match(WHILE)) {
-            this.enclosedLoops++;
-            Stmt whileStatement = whileStatement();
-            this.enclosedLoops--;
-            return whileStatement;
-        }
-        if (match(FOR)) {
-            this.enclosedLoops++;
-            Stmt forStatement = forStatement();
-            this.enclosedLoops--;
-            return forStatement;
-        }
+        if (match(WHILE)) return whileStatement();
+        if (match(FOR)) return forStatement();
         if (match(LEFT_BRACE)) return new Stmt.Block(block());
 
         return expressionStatement();
@@ -117,6 +107,12 @@ public class Parser {
         Expr value = expression();
         consume(SEMICOLON, "Expect ';' after value.");
         return new Stmt.Print(value);
+    }
+
+    private Stmt breakStatement() {
+        Token keyword = previous();
+        consume(SEMICOLON, "Expect ';' after break.");
+        return new Stmt.Break(keyword);
     }
 
     private Stmt returnStatement() {
@@ -396,12 +392,6 @@ public class Parser {
         if (match(FALSE)) return new Expr.Literal(false);
         if (match(TRUE)) return new Expr.Literal(true);
         if (match(NIL)) return new Expr.Literal(null);
-        if (match(BREAK)) {
-            if (this.enclosedLoops == 0) {
-                error(previous(), "'break' can only be used inside loops");
-            }
-            return new Expr.Literal(Constants.BREAK);
-        }
 
         if (match(NUMBER, STRING)) {
             return new Expr.Literal(previous().literal);
