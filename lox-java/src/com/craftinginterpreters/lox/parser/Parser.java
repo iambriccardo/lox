@@ -15,8 +15,8 @@ import static com.craftinginterpreters.lox.lexer.TokenType.*;
 public class Parser {
 
     private final List<Token> tokens;
-    private int current = 0;
     private final int enclosedLoops = 0;
+    private int current = 0;
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;

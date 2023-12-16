@@ -101,6 +101,10 @@ public class Lox {
         }
     }
 
+    public static void warning(String message) {
+        warn(message);
+    }
+
     public static void runtimeError(Interpreter.RuntimeError error) {
         System.err.println("[line " + error.token.line + "] RuntimeError: " + error.getMessage());
         hadRuntimeError = true;
@@ -109,5 +113,9 @@ public class Lox {
     private static void report(int line, String where, String message) {
         System.err.println("[line " + line + "] Error" + where + ": " + message);
         hadError = true;
+    }
+
+    private static void warn(String message) {
+        System.err.println("Warning: " + message);
     }
 }

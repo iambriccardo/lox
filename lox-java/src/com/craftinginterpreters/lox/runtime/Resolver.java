@@ -5,17 +5,16 @@ import com.craftinginterpreters.lox.ast.Expr;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Stack;
+import java.util.*;
 
 public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     private final Stack<Map<String, Boolean>> scopes = new Stack<>();
+    private final Stack<Set<String>> usages = new Stack<>();
     private final Interpreter interpreter;
     private EnclosingContext currentFunction = EnclosingContext.NONE;
     private EnclosingContext currentWhile = EnclosingContext.NONE;
+
     public Resolver(Interpreter interpreter) {
         this.interpreter = interpreter;
     }
@@ -36,10 +35,31 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     private void beginScope() {
         scopes.push(new HashMap<>());
+        usages.push(new HashSet<>());
     }
 
     private void endScope() {
+        Map<String, Boolean> exitingScope = scopes.peek();
+        Set<String> exitingUsage = usages.peek();
+
+        for (Map.Entry<String, Boolean> entry : exitingScope.entrySet()) {
+            if (!exitingUsage.contains(entry.getKey())) {
+                Lox.warning("Variable " + entry.getKey() + " is never used.");
+            } else {
+                // If the variable was used we remove it from the set, in order to compute the set of variables that
+                // were used but do not belong to this scope.
+                exitingUsage.remove(entry.getKey());
+            }
+        }
+
         scopes.pop();
+        usages.pop();
+
+        if (!usages.isEmpty()) {
+            // In case we have an outer usage, we will merge the current usages to the upstream ones.
+            Set<String> outerUsage = usages.peek();
+            outerUsage.addAll(exitingUsage);
+        }
     }
 
     private void declare(Token name) {
@@ -160,6 +180,11 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitVariableExpr(Expr.Variable expr) {
         if (!scopes.isEmpty() && scopes.peek().get(expr.name.lexeme) == Boolean.FALSE) {
             Lox.error(expr.name, "Can't read local variable in its own initializer.");
+        }
+
+        if (!usages.isEmpty()) {
+            // We mark that the variable has been used.
+            usages.peek().add(expr.name.lexeme);
         }
 
         resolveLocal(expr, expr.name);

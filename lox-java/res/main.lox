@@ -1,12 +1,10 @@
-fun apply(fn, a, b) {
-    return fn(a, b);
+fun apply() {
+    var a = 10;
+    {
+        var b = 20;
+        print(a);
+        print(b);
+    }
 }
 
-
-for (var i = 0; i < 10; i = i + 1) {
-    var x = i;
-    var y = i * 10;
-    var value = apply(fun (a, b) { return a + b; }, x, y);
-    print(value);
-    break;
-}
+apply();
