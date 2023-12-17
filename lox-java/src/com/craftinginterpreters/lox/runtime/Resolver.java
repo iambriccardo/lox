@@ -9,7 +9,8 @@ import java.util.*;
 
 public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
-    private final Stack<Map<String, Boolean>> scopes = new Stack<>();
+    private final Stack<List<Boolean>> scopes = new Stack<>();
+    private final Stack<Map<String, Integer>> indexes = new Stack<>();
     private final Stack<Set<String>> usages = new Stack<>();
     private final Interpreter interpreter;
     private EnclosingContext currentFunction = EnclosingContext.NONE;
@@ -20,9 +21,11 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     public void resolve(List<Stmt> statements) {
+        beginScope();
         for (Stmt statement : statements) {
             resolve(statement);
         }
+        endScope();
     }
 
     private void resolve(Stmt stmt) {
@@ -34,56 +37,70 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     private void beginScope() {
-        scopes.push(new HashMap<>());
+        scopes.push(new ArrayList<>());
+        indexes.push(new HashMap<>());
         usages.push(new HashSet<>());
     }
 
     private void endScope() {
-        Map<String, Boolean> exitingScope = scopes.peek();
-        Set<String> exitingUsage = usages.peek();
+        Map<String, Integer> index = indexes.peek();
+        Set<String> usage = usages.peek();
 
-        for (Map.Entry<String, Boolean> entry : exitingScope.entrySet()) {
-            if (!exitingUsage.contains(entry.getKey())) {
+        for (Map.Entry<String, Integer> entry : index.entrySet()) {
+            if (!usage.contains(entry.getKey())) {
                 Lox.warning("Variable " + entry.getKey() + " is never used.");
             } else {
                 // If the variable was used we remove it from the set, in order to compute the set of variables that
                 // were used but do not belong to this scope.
-                exitingUsage.remove(entry.getKey());
+                usage.remove(entry.getKey());
             }
         }
 
         scopes.pop();
+        indexes.pop();
         usages.pop();
 
         if (!usages.isEmpty()) {
             // In case we have an outer usage, we will merge the current usages to the upstream ones.
             Set<String> outerUsage = usages.peek();
-            outerUsage.addAll(exitingUsage);
+            outerUsage.addAll(usage);
         }
     }
 
     private void declare(Token name) {
         if (scopes.isEmpty()) return;
 
-        Map<String, Boolean> scope = scopes.peek();
-        if (scope.containsKey(name.lexeme)) {
+        Map<String, Integer> index = indexes.peek();
+        if (index.containsKey(name.lexeme)) {
             Lox.error(name, "Already a variable with this name in this scope.");
         }
 
-        scope.put(name.lexeme, false);
+        List<Boolean> scope = scopes.peek();
+        // We insert the variable, and we assume it's always appended at the end.
+        int insertionIndex = scope.size();
+        scope.add(false);
+        index.put(name.lexeme, insertionIndex);
     }
 
     private void define(Token name) {
         if (scopes.isEmpty()) return;
-        scopes.peek().put(name.lexeme, true);
+        Map<String, Integer> index = indexes.peek();
+        scopes.peek().set(index.get(name.lexeme), true);
     }
 
     private void resolveLocal(Expr expr, Token name) {
         for (int i = scopes.size() - 1; i >= 0; i--) {
-            if (scopes.get(i).containsKey(name.lexeme)) {
-                interpreter.resolve(expr, scopes.size() - 1 - i);
+            Integer variableIndex = indexes.get(i).get(name.lexeme);
+            if (variableIndex != null) {
+                interpreter.resolve(expr, scopes.size() - 1 - i, variableIndex);
                 return;
             }
+        }
+
+        if (expr instanceof Expr.Assign) {
+            Lox.error(((Expr.Assign) expr).name, "Can't assign an undefined variable.");
+        } else if (expr instanceof Expr.Variable) {
+            Lox.error(((Expr.Variable) expr).name, "Variable undefined.");
         }
     }
 
@@ -178,8 +195,11 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitVariableExpr(Expr.Variable expr) {
-        if (!scopes.isEmpty() && scopes.peek().get(expr.name.lexeme) == Boolean.FALSE) {
-            Lox.error(expr.name, "Can't read local variable in its own initializer.");
+        if (!indexes.isEmpty()) {
+            Integer variableIndex = indexes.peek().get(expr.name.lexeme);
+            if (variableIndex != null && variableIndex < scopes.peek().size() && scopes.peek().get(variableIndex) == Boolean.FALSE) {
+                Lox.error(expr.name, "Can't read local variable in its own initializer.");
+            }
         }
 
         if (!usages.isEmpty()) {

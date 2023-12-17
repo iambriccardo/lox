@@ -17,30 +17,11 @@ import static com.craftinginterpreters.lox.lexer.TokenType.QUESTION_MARK;
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     public final Environment globals = new Environment(null);
-    private final Map<Expr, Integer> locals = new HashMap<>();
+    private final Map<Expr, Environment.Location> locals = new HashMap<>();
     private Environment environment = globals;
 
-    public Interpreter() {
-        this.globals.define("clock", new LoxCallable() {
-            @Override
-            public int arity() {
-                return 0;
-            }
-
-            @Override
-            public Object call(Interpreter interpreter, List<Object> arguments) {
-                return (double) System.currentTimeMillis() / 1000.0;
-            }
-
-            @Override
-            public String toString() {
-                return "<native fn>";
-            }
-        });
-    }
-
-    public void resolve(Expr expr, int depth) {
-        locals.put(expr, depth);
+    public void resolve(Expr expr, int distance, int variableIndex) {
+        locals.put(expr, new Environment.Location(distance, variableIndex));
     }
 
     public void interpret(List<Stmt> statements) {
@@ -111,13 +92,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         return object.toString();
     }
 
-    private Object lookUpVariable(Token name, Expr expr) {
-        Integer distance = locals.get(expr);
-        if (distance != null) {
-            return environment.getAt(distance, name.lexeme);
-        } else {
-            return globals.get(name);
-        }
+    private Object lookUpVariable(Expr.Variable expr) {
+        Environment.Location location = locals.get(expr);
+        return environment.getAt(location);
     }
 
     @Override
@@ -135,7 +112,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     void executeBlock(List<Stmt> statements, Environment environment) {
         Environment previous = this.environment;
         try {
-            this.environment = environment;
+            this.environment = new Environment(environment);
 
             for (Stmt statement : statements) {
                 execute(statement);
@@ -169,7 +146,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
             value = evaluate(stmt.initializer);
         }
 
-        environment.define(stmt.name.lexeme, value);
+        environment.define(value);
         return null;
     }
 
@@ -188,7 +165,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     @Override
     public Void visitFunctionStmt(Stmt.Function stmt) {
         LoxFunction function = new LoxFunction(stmt, this.environment);
-        environment.define(stmt.name.lexeme, function);
+        this.environment.define(function);
         return null;
     }
 
@@ -207,18 +184,16 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     @Override
     public Object visitVariableExpr(Expr.Variable expr) {
-        return lookUpVariable(expr.name, expr);
+        return lookUpVariable(expr);
     }
 
     @Override
     public Object visitAssignExpr(Expr.Assign expr) {
         Object value = evaluate(expr.value);
 
-        Integer distance = locals.get(expr);
-        if (distance != null) {
-            environment.assignAt(distance, expr.name, value);
-        } else {
-            globals.assign(expr.name, value);
+        Environment.Location location = locals.get(expr);
+        if (location != null) {
+            environment.assignAt(location, value);
         }
 
         return value;

@@ -3,8 +3,12 @@ fun apply() {
     {
         var b = 20;
         print(a);
-        print(b);
+        {
+            print(b);
+        }
     }
 }
+
+var e = 50;
 
 apply();

@@ -1,59 +1,27 @@
 package com.craftinginterpreters.lox.runtime;
 
-import com.craftinginterpreters.lox.lexer.Token;
-
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Environment {
+
     private final Environment enclosing;
-    private final Map<String, Object> values = new HashMap<>();
+    private final List<Object> values = new ArrayList<>();
 
     public Environment(Environment enclosing) {
         this.enclosing = enclosing;
     }
 
-    public void define(String name, Object value) {
-        values.put(name, value);
+    public void define(Object value) {
+        values.add(value);
     }
 
-    public void assign(Token name, Object value) {
-        if (values.containsKey(name.lexeme)) {
-            values.put(name.lexeme, value);
-            return;
-        }
-
-        if (enclosing != null) {
-            enclosing.assign(name, value);
-            return;
-        }
-
-        throw new Interpreter.RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
+    public void assignAt(Location location, Object value) {
+        ancestor(location.getDistance()).values.set(location.getVariableIndex(), value);
     }
 
-    public void assignAt(int distance, Token name, Object value) {
-        ancestor(distance).values.put(name.lexeme, value);
-    }
-
-    public Object get(Token name) {
-        if (values.containsKey(name.lexeme)) {
-            Object value = values.get(name.lexeme);
-            if (value == null) {
-                throw new Interpreter.RuntimeError(name, "Uninitialized variable '" + name.lexeme + "'.");
-            }
-
-            return value;
-        }
-
-        if (enclosing != null) {
-            return enclosing.get(name);
-        }
-
-        throw new Interpreter.RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
-    }
-
-    public Object getAt(int distance, String name) {
-        return ancestor(distance).values.get(name);
+    public Object getAt(Location location) {
+        return ancestor(location.distance).values.get(location.getVariableIndex());
     }
 
     private Environment ancestor(int distance) {
@@ -63,5 +31,23 @@ public class Environment {
         }
 
         return environment;
+    }
+
+    public static class Location {
+        private final int distance;
+        private final int variableIndex;
+
+        public Location(int distance, int variableIndex) {
+            this.distance = distance;
+            this.variableIndex = variableIndex;
+        }
+
+        public int getDistance() {
+            return distance;
+        }
+
+        public int getVariableIndex() {
+            return variableIndex;
+        }
     }
 }
