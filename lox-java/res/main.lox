@@ -1,14 +1,4 @@
-fun apply() {
-    var a = 10;
-    {
-        var b = 20;
-        print(a);
-        {
-            print(b);
-        }
-    }
-}
-
-var e = 50;
-
-apply();
+class Bagel {}
+var bagel = Bagel();
+bagel.something = 10;
+print bagel.something;

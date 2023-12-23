@@ -10,6 +10,8 @@ public abstract class Stmt {
     public interface Visitor<R> {
         R visitBlockStmt(Block stmt);
 
+        R visitClassStmt(Class stmt);
+
         R visitExpressionStmt(Expression stmt);
 
         R visitFunctionStmt(Function stmt);
@@ -40,6 +42,20 @@ public abstract class Stmt {
         }
     }
 
+    public static class Class extends Stmt {
+        public final Token name;
+        public final List<Stmt.Function> methods;
+        public Class(Token name, List<Stmt.Function> methods) {
+            this.name = name;
+            this.methods = methods;
+        }
+
+        @Override
+        public <R> R accept(Visitor<R> visitor) {
+            return visitor.visitClassStmt(this);
+        }
+    }
+
     public static class Expression extends Stmt {
         public final Expr expression;
 
@@ -57,7 +73,6 @@ public abstract class Stmt {
         public final Token name;
         public final List<Token> params;
         public final List<Stmt> body;
-
         public Function(Token name, List<Token> params, List<Stmt> body) {
             this.name = name;
             this.params = params;
@@ -74,7 +89,6 @@ public abstract class Stmt {
         public final Expr condition;
         public final Stmt thenBranch;
         public final Stmt elseBranch;
-
         public If(Expr condition, Stmt thenBranch, Stmt elseBranch) {
             this.condition = condition;
             this.thenBranch = thenBranch;
@@ -103,7 +117,6 @@ public abstract class Stmt {
     public static class Return extends Stmt {
         public final Token keyword;
         public final Expr value;
-
         public Return(Token keyword, Expr value) {
             this.keyword = keyword;
             this.value = value;
@@ -131,7 +144,6 @@ public abstract class Stmt {
     public static class Var extends Stmt {
         public final Token name;
         public final Expr initializer;
-
         public Var(Token name, Expr initializer) {
             this.name = name;
             this.initializer = initializer;
@@ -146,7 +158,6 @@ public abstract class Stmt {
     public static class While extends Stmt {
         public final Expr condition;
         public final Stmt body;
-
         public While(Expr condition, Stmt body) {
             this.condition = condition;
             this.body = body;
