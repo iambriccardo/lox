@@ -92,7 +92,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         return object.toString();
     }
 
-    private Object lookUpVariable(Expr.Variable expr) {
+    private Object lookUpVariable(Expr expr) {
         Environment.Location location = locals.get(expr);
         return environment.getAt(location);
     }
@@ -164,8 +164,15 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     @Override
     public Object visitClassStmt(Stmt.Class stmt) {
-        LoxClass klass = new LoxClass(stmt.name.lexeme);
+        Map<String, LoxFunction> methods = new HashMap<>();
+        for (Stmt.Function method : stmt.methods) {
+            LoxFunction function = new LoxFunction(method, this.environment);
+            methods.put(method.name.lexeme, function);
+        }
+
+        LoxClass klass = new LoxClass(stmt.name.lexeme, methods);
         this.environment.define(klass);
+
         return null;
     }
 
@@ -289,6 +296,11 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     }
 
     @Override
+    public Object visitThisExpr(Expr.This expr) {
+        return lookUpVariable(expr);
+    }
+
+    @Override
     public Object visitGroupingExpr(Expr.Grouping expr) {
         return evaluate(expr.expression);
     }
@@ -302,15 +314,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public Object visitUnaryExpr(Expr.Unary expr) {
         Object right = evaluate(expr.right);
 
-        switch (expr.operator.type) {
-            case MINUS:
+        return switch (expr.operator.type) {
+            case MINUS -> {
                 checkNumberOperand(expr.operator, right);
-                return -(double) right;
-            case BANG:
-                return !isTruthy(right);
-        }
-
-        return null;
+                yield -(double) right;
+            }
+            case BANG -> !isTruthy(right);
+            default -> null;
+        };
     }
 
     @Override

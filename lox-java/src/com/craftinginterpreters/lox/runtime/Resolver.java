@@ -15,6 +15,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private final Interpreter interpreter;
     private EnclosingContext currentFunction = EnclosingContext.NONE;
     private EnclosingContext currentWhile = EnclosingContext.NONE;
+    private EnclosingContext currentClass = EnclosingContext.NONE;
 
     public Resolver(Interpreter interpreter) {
         this.interpreter = interpreter;
@@ -47,6 +48,9 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         Set<String> usage = usages.peek();
 
         for (Map.Entry<String, Integer> entry : index.entrySet()) {
+            // If the variable is "this", we don't want to raise a warning in case it's unused.
+            if (entry.getKey().equals("this")) continue;
+
             if (!usage.contains(entry.getKey())) {
                 Lox.warning("Variable " + entry.getKey() + " is never used.");
             } else {
@@ -104,9 +108,9 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
     }
 
-    private void resolveFunction(Stmt.Function function) {
+    private void resolveFunction(Stmt.Function function, EnclosingContext context) {
         EnclosingContext enclosingFunction = currentFunction;
-        currentFunction = EnclosingContext.FUNCTION;
+        currentFunction = context;
         beginScope();
         for (Token param : function.params) {
             declare(param);
@@ -195,6 +199,17 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     @Override
+    public Void visitThisExpr(Expr.This expr) {
+        if (currentClass != EnclosingContext.CLASS) {
+            Lox.error(expr.keyword, "Can't use 'this' outside of a class.");
+            return null;
+        }
+
+        resolveLocal(expr, expr.keyword);
+        return null;
+    }
+
+    @Override
     public Void visitUnaryExpr(Expr.Unary expr) {
         resolve(expr.right);
         return null;
@@ -240,8 +255,24 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitClassStmt(Stmt.Class stmt) {
+        EnclosingContext enclosingClass = currentClass;
+        currentClass = EnclosingContext.CLASS;
+
         declare(stmt.name);
         define(stmt.name);
+
+        beginScope();
+        List<Boolean> scope = scopes.peek();
+        int insertionIndex = scope.size();
+        scope.add(false);
+        indexes.peek().put("this", insertionIndex);
+
+        for (Stmt.Function method : stmt.methods) {
+            resolveFunction(method, EnclosingContext.METHOD);
+        }
+
+        endScope();
+        currentClass = enclosingClass;
         return null;
     }
 
@@ -250,7 +281,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         declare(stmt.name);
         define(stmt.name);
 
-        resolveFunction(stmt);
+        resolveFunction(stmt, EnclosingContext.FUNCTION);
         return null;
     }
 
@@ -317,6 +348,8 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private enum EnclosingContext {
         NONE,
         FUNCTION,
-        WHILE
+        METHOD,
+        WHILE,
+        CLASS
     }
 }

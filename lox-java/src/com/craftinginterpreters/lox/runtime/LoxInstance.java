@@ -5,7 +5,7 @@ import com.craftinginterpreters.lox.lexer.Token;
 import java.util.HashMap;
 import java.util.Map;
 
-class LoxInstance {
+public class LoxInstance {
     private final LoxClass klass;
     private final Map<String, Object> fields = new HashMap<>();
 
@@ -21,6 +21,9 @@ class LoxInstance {
         if (this.fields.containsKey(name.lexeme)) {
             return this.fields.get(name.lexeme);
         }
+
+        LoxFunction method = klass.findMethod(name.lexeme);
+        if (method != null) return method.bind(this);
 
         throw new Interpreter.RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
     }
