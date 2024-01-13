@@ -1,32 +1,57 @@
 package com.craftinginterpreters.lox.runtime.constructs;
 
+import com.craftinginterpreters.lox.lexer.Token;
 import com.craftinginterpreters.lox.runtime.Interpreter;
 
 import java.util.List;
 import java.util.Map;
 
-public class LoxClass implements LoxCallable {
+public class LoxClass extends LoxInstance implements LoxCallable {
 
     private final String name;
     private final Map<String, LoxFunction> methods;
+    private final Map<String, LoxFunction> staticMethods;
 
-    public LoxClass(String name, Map<String, LoxFunction> methods) {
+    public LoxClass(String name, Map<String, LoxFunction> methods, Map<String, LoxFunction> staticMethods) {
         this.name = name;
         this.methods = methods;
+        this.staticMethods = staticMethods;
+    }
+
+    @Override
+    public void set(Token name, Object value) {
+        throw new Interpreter.RuntimeError(name, "Can't set static property '" + name.lexeme + "' on " + this + ".");
+    }
+
+    @Override
+    public Object get(Token name) {
+        // For now, we support only static methods and not static fields.
+        LoxFunction staticMethod = this.findStaticMethod(name.lexeme);
+        if (staticMethod != null) return staticMethod;
+
+        throw new Interpreter.RuntimeError(name, "Undefined static method '" + name.lexeme + "'.");
+    }
+
+    @Override
+    public String toString() {
+        return this.getName() + " class";
     }
 
     public String getName() {
         return name;
     }
 
-    @Override
-    public String toString() {
-        return name;
+    public LoxFunction findMethod(String name) {
+        return find(this.methods, name);
     }
 
-    public LoxFunction findMethod(String name) {
-        if (methods.containsKey(name)) {
-            return methods.get(name);
+    public LoxFunction findStaticMethod(String name) {
+        return find(this.staticMethods, name);
+    }
+
+    private LoxFunction find(Map<String, LoxFunction> functions, String name) {
+        if (functions.containsKey(name)) {
+            return functions.get(name);
         }
 
         return null;

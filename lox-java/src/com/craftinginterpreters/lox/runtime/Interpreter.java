@@ -103,12 +103,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     @Override
     public Object visitExpressionStmt(Stmt.Expression stmt) {
         evaluate(stmt.expression);
+
         return null;
     }
 
     @Override
     public Object visitBlockStmt(Stmt.Block stmt) {
         executeBlock(stmt.statements, new Environment(environment));
+
         return null;
     }
 
@@ -132,6 +134,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         } else if (stmt.elseBranch != null) {
             execute(stmt.elseBranch);
         }
+
         return null;
     }
 
@@ -139,6 +142,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public Object visitPrintStmt(Stmt.Print stmt) {
         Object value = evaluate(stmt.expression);
         System.out.println(stringify(value));
+
         return null;
     }
 
@@ -150,6 +154,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         }
 
         environment.define(value);
+
         return null;
     }
 
@@ -162,18 +167,26 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
                 break;
             }
         }
+
         return null;
     }
 
     @Override
     public Object visitClassStmt(Stmt.Class stmt) {
         Map<String, LoxFunction> methods = new HashMap<>();
+        Map<String, LoxFunction> staticMethods = new HashMap<>();
+
         for (Stmt.Function method : stmt.methods) {
-            LoxFunction function = new LoxFunction(method, this.environment, method.name.lexeme.equals("init"));
-            methods.put(method.name.lexeme, function);
+            boolean isInitializer = !method.isStatic && method.name.lexeme.equals("init");
+            LoxFunction function = new LoxFunction(method, this.environment, isInitializer);
+            if (method.isStatic) {
+                staticMethods.put(method.name.lexeme, function);
+            } else {
+                methods.put(method.name.lexeme, function);
+            }
         }
 
-        LoxClass klass = new LoxClass(stmt.name.lexeme, methods);
+        LoxClass klass = new LoxClass(stmt.name.lexeme, methods, staticMethods);
         this.environment.define(klass);
 
         return null;
@@ -183,6 +196,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public Void visitFunctionStmt(Stmt.Function stmt) {
         LoxFunction function = new LoxFunction(stmt, this.environment, false);
         this.environment.define(function);
+
         return null;
     }
 

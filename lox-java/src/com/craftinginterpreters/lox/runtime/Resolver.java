@@ -86,6 +86,13 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         index.put(name.lexeme, insertionIndex);
     }
 
+    private void defineThis() {
+        List<Boolean> scope = scopes.peek();
+        int insertionIndex = scope.size();
+        scope.add(true);
+        indexes.peek().put("this", insertionIndex);
+    }
+
     private void define(Token name) {
         if (scopes.isEmpty()) return;
         Map<String, Integer> index = indexes.peek();
@@ -138,6 +145,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitAssignExpr(Expr.Assign expr) {
         resolve(expr.value);
         resolveLocal(expr, expr.name);
+
         return null;
     }
 
@@ -145,6 +153,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitBinaryExpr(Expr.Binary expr) {
         resolve(expr.left);
         resolve(expr.right);
+
         return null;
     }
 
@@ -153,6 +162,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         resolve(expr.expr1);
         resolve(expr.expr2);
         resolve(expr.expr3);
+
         return null;
     }
 
@@ -170,12 +180,14 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     @Override
     public Void visitGetExpr(Expr.Get expr) {
         resolve(expr.object);
+
         return null;
     }
 
     @Override
     public Void visitGroupingExpr(Expr.Grouping expr) {
         resolve(expr.expression);
+
         return null;
     }
 
@@ -188,6 +200,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitLogicalExpr(Expr.Logical expr) {
         resolve(expr.left);
         resolve(expr.right);
+
         return null;
     }
 
@@ -195,6 +208,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitSetExpr(Expr.Set expr) {
         resolve(expr.value);
         resolve(expr.object);
+
         return null;
     }
 
@@ -205,19 +219,27 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             return null;
         }
 
+        if (currentFunction == EnclosingContext.STATIC_METHOD) {
+            Lox.error(expr.keyword, "Can't use 'this' inside a static method.");
+            return null;
+        }
+
         resolveLocal(expr, expr.keyword);
+
         return null;
     }
 
     @Override
     public Void visitUnaryExpr(Expr.Unary expr) {
         resolve(expr.right);
+
         return null;
     }
 
     @Override
     public Void visitLambdaExpr(Expr.Lambda expr) {
         resolveLambda(expr);
+
         return null;
     }
 
@@ -236,6 +258,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
 
         resolveLocal(expr, expr.name);
+
         return null;
     }
 
@@ -244,12 +267,14 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         beginScope();
         resolve(stmt.statements);
         endScope();
+
         return null;
     }
 
     @Override
     public Void visitExpressionStmt(Stmt.Expression stmt) {
         resolve(stmt.expression);
+
         return null;
     }
 
@@ -261,23 +286,29 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         declare(stmt.name);
         define(stmt.name);
 
-        beginScope();
-        List<Boolean> scope = scopes.peek();
-        int insertionIndex = scope.size();
-        scope.add(false);
-        indexes.peek().put("this", insertionIndex);
-
         for (Stmt.Function method : stmt.methods) {
+            // Only for non-static methods, we have to define an extra scope which contains the `this`.
+            if (!method.isStatic) {
+                beginScope();
+                defineThis();
+            }
+
             EnclosingContext enclosingFunction = EnclosingContext.METHOD;
             if (method.name.lexeme.equals("init")) {
                 enclosingFunction = EnclosingContext.INITIALIZER;
+            } else if (method.isStatic) {
+                enclosingFunction = EnclosingContext.STATIC_METHOD;
             }
 
             resolveFunction(method, enclosingFunction);
+
+            if (!method.isStatic) {
+                endScope();
+            }
         }
 
-        endScope();
         currentClass = enclosingClass;
+
         return null;
     }
 
@@ -287,6 +318,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         define(stmt.name);
 
         resolveFunction(stmt, EnclosingContext.FUNCTION);
+
         return null;
     }
 
@@ -297,6 +329,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (stmt.elseBranch != null) {
             resolve(stmt.elseBranch);
         }
+
         return null;
     }
 
@@ -317,7 +350,10 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitReturnStmt(Stmt.Return stmt) {
-        if (currentFunction != EnclosingContext.FUNCTION && currentFunction != EnclosingContext.METHOD && currentFunction != EnclosingContext.INITIALIZER) {
+        if (currentFunction != EnclosingContext.FUNCTION
+                && currentFunction != EnclosingContext.METHOD
+                && currentFunction != EnclosingContext.STATIC_METHOD
+                && currentFunction != EnclosingContext.INITIALIZER) {
             Lox.error(stmt.keyword, "Can't return from top-level code.");
         }
 
@@ -339,6 +375,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             resolve(stmt.initializer);
         }
         define(stmt.name);
+
         return null;
     }
 
@@ -359,6 +396,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         INITIALIZER,
         FUNCTION,
         METHOD,
+        STATIC_METHOD,
         CLASS,
         WHILE,
     }

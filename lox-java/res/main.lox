@@ -5,7 +5,14 @@ class Foo {
     print(lol);
     return;
   }
+
+  class something(n) {
+    print(n);
+    return n * n;
+  }
 }
 
-var test = Foo();
-print(test);
+var s = Foo.something(2);
+print(s);
+
+print(Foo);
