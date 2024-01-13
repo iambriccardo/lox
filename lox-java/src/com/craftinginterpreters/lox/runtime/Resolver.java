@@ -268,7 +268,12 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         indexes.peek().put("this", insertionIndex);
 
         for (Stmt.Function method : stmt.methods) {
-            resolveFunction(method, EnclosingContext.METHOD);
+            EnclosingContext enclosingFunction = EnclosingContext.METHOD;
+            if (method.name.lexeme.equals("init")) {
+                enclosingFunction = EnclosingContext.INITIALIZER;
+            }
+
+            resolveFunction(method, enclosingFunction);
         }
 
         endScope();
@@ -312,11 +317,15 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitReturnStmt(Stmt.Return stmt) {
-        if (currentFunction != EnclosingContext.FUNCTION) {
+        if (currentFunction != EnclosingContext.FUNCTION && currentFunction != EnclosingContext.METHOD && currentFunction != EnclosingContext.INITIALIZER) {
             Lox.error(stmt.keyword, "Can't return from top-level code.");
         }
 
         if (stmt.value != null) {
+            if (currentFunction == EnclosingContext.INITIALIZER) {
+                Lox.error(stmt.keyword, "Can't return a value from an initializer.");
+            }
+
             resolve(stmt.value);
         }
 
@@ -347,9 +356,10 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     private enum EnclosingContext {
         NONE,
+        INITIALIZER,
         FUNCTION,
         METHOD,
+        CLASS,
         WHILE,
-        CLASS
     }
 }
