@@ -5,6 +5,9 @@ import com.craftinginterpreters.lox.ast.Expr;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
 import com.craftinginterpreters.lox.lexer.TokenType;
+import com.craftinginterpreters.lox.runtime.constructs.*;
+import com.craftinginterpreters.lox.runtime.unwinders.Break;
+import com.craftinginterpreters.lox.runtime.unwinders.Return;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -109,7 +112,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         return null;
     }
 
-    void executeBlock(List<Stmt> statements, Environment environment) {
+    public void executeBlock(List<Stmt> statements, Environment environment) {
         Environment previous = this.environment;
         try {
             this.environment = new Environment(environment);
@@ -378,7 +381,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public static class RuntimeError extends RuntimeException {
         public final Token token;
 
-        RuntimeError(Token token, String message) {
+        public RuntimeError(Token token, String message) {
             super(message);
             this.token = token;
         }

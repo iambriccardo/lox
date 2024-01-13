@@ -59,6 +59,8 @@ public class Parser {
     }
 
     private Stmt.Function function(String kind) {
+        // A static method can only be checked when we are parsing methods.
+        boolean isStaticMethod = kind.equals("method") && match(CLASS);
         Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
 
         consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
@@ -77,7 +79,7 @@ public class Parser {
         consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
         List<Stmt> body = block();
 
-        return new Stmt.Function(name, parameters, body);
+        return new Stmt.Function(name, parameters, body, isStaticMethod);
     }
 
     private Stmt varDeclaration() {

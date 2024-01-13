@@ -1,6 +1,7 @@
-package com.craftinginterpreters.lox.runtime;
+package com.craftinginterpreters.lox.runtime.constructs;
 
 import com.craftinginterpreters.lox.lexer.Token;
+import com.craftinginterpreters.lox.runtime.Interpreter;
 
 import java.util.HashMap;
 import java.util.Map;
