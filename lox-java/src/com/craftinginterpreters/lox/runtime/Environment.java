@@ -49,5 +49,9 @@ public class Environment {
         public int getVariableIndex() {
             return variableIndex;
         }
+
+        public Environment.Location decrementDistance() {
+            return new Environment.Location(this.distance - 1, this.variableIndex);
+        }
     }
 }

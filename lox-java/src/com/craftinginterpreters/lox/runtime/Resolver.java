@@ -44,13 +44,28 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         usages.push(new HashSet<>());
     }
 
+    private boolean isIntrinsicVariable(String variableName) {
+        return variableName.equals("this") || variableName.equals("super");
+    }
+
+    private void defineIntrinsicVariable(String intrinsicName) {
+        if (!isIntrinsicVariable(intrinsicName)) {
+            Lox.warning("Variable " + intrinsicName + " is not a known intrinsic.");
+        }
+
+        List<Boolean> scope = scopes.peek();
+        int insertionIndex = scope.size();
+        scope.add(true);
+        indexes.peek().put(intrinsicName, insertionIndex);
+    }
+
     private void endScope() {
         Map<String, Integer> index = indexes.peek();
         Set<String> usage = usages.peek();
 
         for (Map.Entry<String, Integer> entry : index.entrySet()) {
-            // If the variable is "this", we don't want to raise a warning in case it's unused.
-            if (entry.getKey().equals("this")) continue;
+            // If the variable is an intrinsic, we don't want to raise a warning in case it's unused.
+            if (isIntrinsicVariable(entry.getKey())) continue;
 
             if (!usage.contains(entry.getKey())) {
                 Lox.warning("Variable " + entry.getKey() + " is never used.");
@@ -85,13 +100,6 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         int insertionIndex = scope.size();
         scope.add(false);
         index.put(name.lexeme, insertionIndex);
-    }
-
-    private void defineThis() {
-        List<Boolean> scope = scopes.peek();
-        int insertionIndex = scope.size();
-        scope.add(true);
-        indexes.peek().put("this", insertionIndex);
     }
 
     private void define(Token name) {
@@ -214,6 +222,19 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     @Override
+    public Void visitSuperExpr(Expr.Super expr) {
+        if (currentClass == EnclosingContext.NONE) {
+            Lox.error(expr.keyword, "Can't use 'super' outside of a class.");
+        } else if (currentClass != EnclosingContext.SUBCLASS) {
+            Lox.error(expr.keyword, "Can't use 'super' in a class with no superclass.");
+        }
+
+        resolveLocal(expr, expr.keyword);
+
+        return null;
+    }
+
+    @Override
     public Void visitThisExpr(Expr.This expr) {
         if (currentClass != EnclosingContext.CLASS) {
             Lox.error(expr.keyword, "Can't use 'this' outside of a class.");
@@ -287,11 +308,22 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         declare(stmt.name);
         define(stmt.name);
 
+        if (stmt.superclass != null && stmt.name.lexeme.equals(stmt.superclass.name.lexeme)) {
+            Lox.error(stmt.superclass.name, "A class can't inherit from itself.");
+        }
+
+        if (stmt.superclass != null) {
+            currentClass = EnclosingContext.SUBCLASS;
+            resolve(stmt.superclass);
+            beginScope();
+            defineIntrinsicVariable("super");
+        }
+
         for (Stmt.Function method : stmt.methods) {
             // Only for non-static methods, we have to define an extra scope which contains the `this`.
             if (method.functionType != FunctionType.STATIC_METHOD) {
                 beginScope();
-                defineThis();
+                defineIntrinsicVariable("this");
             }
 
             EnclosingContext enclosingFunction = EnclosingContext.METHOD;
@@ -306,6 +338,10 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             if (method.functionType != FunctionType.STATIC_METHOD) {
                 endScope();
             }
+        }
+
+        if (stmt.superclass != null) {
+            endScope();
         }
 
         currentClass = enclosingClass;
@@ -399,6 +435,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         METHOD,
         STATIC_METHOD,
         CLASS,
+        SUBCLASS,
         WHILE,
     }
 }

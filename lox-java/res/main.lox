@@ -1,23 +1,14 @@
-class Foo {
-  init() {
-    print("Initializing");
-    var lol = "lol 1";
-    print(lol);
-    return;
-  }
-
-  class something(n) {
-    print(n);
-    return n * n;
-  }
-
-  area {
-    return 2;
+class Doughnut {
+  cook() {
+    print "Fry until golden brown.";
   }
 }
 
-var s = Foo.something(2);
-print(s);
+class BostonCream < Doughnut {
+  cook() {
+    super.cook();
+    print "Pipe full of custard and coat with chocolate.";
+  }
+}
 
-var f = Foo();
-print(f.area);
+BostonCream().cook();
