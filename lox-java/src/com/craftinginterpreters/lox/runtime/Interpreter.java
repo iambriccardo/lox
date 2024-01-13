@@ -2,6 +2,7 @@ package com.craftinginterpreters.lox.runtime;
 
 import com.craftinginterpreters.lox.Lox;
 import com.craftinginterpreters.lox.ast.Expr;
+import com.craftinginterpreters.lox.ast.FunctionType;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
 import com.craftinginterpreters.lox.lexer.TokenType;
@@ -175,18 +176,24 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public Object visitClassStmt(Stmt.Class stmt) {
         Map<String, LoxFunction> methods = new HashMap<>();
         Map<String, LoxFunction> staticMethods = new HashMap<>();
+        Map<String, LoxFunction> getterMethods = new HashMap<>();
 
         for (Stmt.Function method : stmt.methods) {
-            boolean isInitializer = !method.isStatic && method.name.lexeme.equals("init");
-            LoxFunction function = new LoxFunction(method, this.environment, isInitializer);
-            if (method.isStatic) {
-                staticMethods.put(method.name.lexeme, function);
-            } else {
+            boolean isInitializer = method.functionType == FunctionType.METHOD && method.name.lexeme.equals("init");
+            boolean isParameterless = method.functionType == FunctionType.GETTER;
+
+            LoxFunction function = new LoxFunction(method, this.environment, isInitializer, isParameterless);
+
+            if (method.functionType == FunctionType.METHOD) {
                 methods.put(method.name.lexeme, function);
+            } else if (method.functionType == FunctionType.STATIC_METHOD) {
+                staticMethods.put(method.name.lexeme, function);
+            } else if (method.functionType == FunctionType.GETTER) {
+                getterMethods.put(method.name.lexeme, function);
             }
         }
 
-        LoxClass klass = new LoxClass(stmt.name.lexeme, methods, staticMethods);
+        LoxClass klass = new LoxClass(stmt.name.lexeme, methods, staticMethods, getterMethods);
         this.environment.define(klass);
 
         return null;
@@ -194,7 +201,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     @Override
     public Void visitFunctionStmt(Stmt.Function stmt) {
-        LoxFunction function = new LoxFunction(stmt, this.environment, false);
+        LoxFunction function = new LoxFunction(stmt, this.environment, false, false);
         this.environment.define(function);
 
         return null;
@@ -381,7 +388,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     public Object visitGetExpr(Expr.Get expr) {
         Object object = evaluate(expr.object);
         if (object instanceof LoxInstance) {
-            return ((LoxInstance) object).get(expr.name);
+            Object getResult = ((LoxInstance) object).get(expr.name);
+            if (getResult instanceof LoxFunction function && function.isParameterless) {
+                return function.call(this, null);
+            }
+
+            return getResult;
         }
 
         throw new RuntimeError(expr.name, "Only instances have properties.");

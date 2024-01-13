@@ -2,6 +2,7 @@ package com.craftinginterpreters.lox.runtime;
 
 import com.craftinginterpreters.lox.Lox;
 import com.craftinginterpreters.lox.ast.Expr;
+import com.craftinginterpreters.lox.ast.FunctionType;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
 
@@ -288,7 +289,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
         for (Stmt.Function method : stmt.methods) {
             // Only for non-static methods, we have to define an extra scope which contains the `this`.
-            if (!method.isStatic) {
+            if (method.functionType != FunctionType.STATIC_METHOD) {
                 beginScope();
                 defineThis();
             }
@@ -296,13 +297,13 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             EnclosingContext enclosingFunction = EnclosingContext.METHOD;
             if (method.name.lexeme.equals("init")) {
                 enclosingFunction = EnclosingContext.INITIALIZER;
-            } else if (method.isStatic) {
+            } else if (method.functionType == FunctionType.STATIC_METHOD) {
                 enclosingFunction = EnclosingContext.STATIC_METHOD;
             }
 
             resolveFunction(method, enclosingFunction);
 
-            if (!method.isStatic) {
+            if (method.functionType != FunctionType.STATIC_METHOD) {
                 endScope();
             }
         }

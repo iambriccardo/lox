@@ -8,21 +8,23 @@ import com.craftinginterpreters.lox.runtime.unwinders.Return;
 import java.util.List;
 
 public class LoxFunction implements LoxCallable {
+    public final boolean isInitializer;
+    public final boolean isParameterless;
     private final Stmt.Function declaration;
     private final Environment closure;
-    private final boolean isInitializer;
 
-    public LoxFunction(Stmt.Function declaration, Environment closure, boolean isInitializer) {
+    public LoxFunction(Stmt.Function declaration, Environment closure, boolean isInitializer, boolean isParameterless) {
         this.declaration = declaration;
         this.closure = closure;
         this.isInitializer = isInitializer;
+        this.isParameterless = isParameterless;
     }
 
     public LoxFunction bind(LoxInstance instance) {
         Environment environment = new Environment(closure);
         environment.define(instance);
 
-        return new LoxFunction(declaration, environment, isInitializer);
+        return new LoxFunction(declaration, environment, isInitializer, isParameterless);
     }
 
     @Override

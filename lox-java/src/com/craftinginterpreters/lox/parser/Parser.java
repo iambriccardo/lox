@@ -2,6 +2,7 @@ package com.craftinginterpreters.lox.parser;
 
 import com.craftinginterpreters.lox.Lox;
 import com.craftinginterpreters.lox.ast.Expr;
+import com.craftinginterpreters.lox.ast.FunctionType;
 import com.craftinginterpreters.lox.ast.Stmt;
 import com.craftinginterpreters.lox.lexer.Token;
 import com.craftinginterpreters.lox.lexer.TokenType;
@@ -59,11 +60,37 @@ public class Parser {
     }
 
     private Stmt.Function function(String kind) {
-        // A static method can only be checked when we are parsing methods.
-        boolean isStaticMethod = kind.equals("method") && match(CLASS);
+        FunctionType functionType = FunctionType.FUNCTION;
+
+        if (kind.equals("method")) {
+            functionType = FunctionType.METHOD;
+        }
+
+        if (kind.equals("method") && match(CLASS)) {
+            functionType = FunctionType.STATIC_METHOD;
+        }
+
         Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
 
-        consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+        List<Token> parameters = new ArrayList<>();
+        if (functionType == FunctionType.FUNCTION || functionType == FunctionType.STATIC_METHOD) {
+            consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+            parameters = functionParameters();
+        } else {
+            if (match(LEFT_PAREN)) {
+                parameters = functionParameters();
+            } else {
+                functionType = FunctionType.GETTER;
+            }
+        }
+
+        consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+        List<Stmt> body = block();
+
+        return new Stmt.Function(name, parameters, body, functionType);
+    }
+
+    private List<Token> functionParameters() {
         List<Token> parameters = new ArrayList<>();
         if (!check(RIGHT_PAREN)) {
             do {
@@ -76,10 +103,7 @@ public class Parser {
         }
         consume(RIGHT_PAREN, "Expect ')' after parameters.");
 
-        consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
-        List<Stmt> body = block();
-
-        return new Stmt.Function(name, parameters, body, isStaticMethod);
+        return parameters;
     }
 
     private Stmt varDeclaration() {

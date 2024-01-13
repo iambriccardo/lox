@@ -29,6 +29,9 @@ public class LoxInstance {
         LoxFunction method = klass.findMethod(name.lexeme);
         if (method != null) return method.bind(this);
 
+        LoxFunction getterMethod = klass.findGetterMethod(name.lexeme);
+        if (getterMethod != null) return getterMethod.bind(this);
+
         throw new Interpreter.RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
     }
 

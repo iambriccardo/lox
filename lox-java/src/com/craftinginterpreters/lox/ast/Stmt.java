@@ -74,13 +74,13 @@ public abstract class Stmt {
         public final Token name;
         public final List<Token> params;
         public final List<Stmt> body;
-        public final boolean isStatic;
+        public final FunctionType functionType;
 
-        public Function(Token name, List<Token> params, List<Stmt> body, boolean isStatic) {
+        public Function(Token name, List<Token> params, List<Stmt> body, FunctionType functionType) {
             this.name = name;
             this.params = params;
             this.body = body;
-            this.isStatic = isStatic;
+            this.functionType = functionType;
         }
 
         @Override

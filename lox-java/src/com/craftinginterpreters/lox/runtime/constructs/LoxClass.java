@@ -11,11 +11,13 @@ public class LoxClass extends LoxInstance implements LoxCallable {
     private final String name;
     private final Map<String, LoxFunction> methods;
     private final Map<String, LoxFunction> staticMethods;
+    private final Map<String, LoxFunction> getterMethods;
 
-    public LoxClass(String name, Map<String, LoxFunction> methods, Map<String, LoxFunction> staticMethods) {
+    public LoxClass(String name, Map<String, LoxFunction> methods, Map<String, LoxFunction> staticMethods, Map<String, LoxFunction> getterMethods) {
         this.name = name;
         this.methods = methods;
         this.staticMethods = staticMethods;
+        this.getterMethods = getterMethods;
     }
 
     @Override
@@ -47,6 +49,10 @@ public class LoxClass extends LoxInstance implements LoxCallable {
 
     public LoxFunction findStaticMethod(String name) {
         return find(this.staticMethods, name);
+    }
+
+    public LoxFunction findGetterMethod(String name) {
+        return find(this.getterMethods, name);
     }
 
     private LoxFunction find(Map<String, LoxFunction> functions, String name) {

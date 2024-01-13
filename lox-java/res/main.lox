@@ -10,9 +10,14 @@ class Foo {
     print(n);
     return n * n;
   }
+
+  area {
+    return 2;
+  }
 }
 
 var s = Foo.something(2);
 print(s);
 
-print(Foo);
+var f = Foo();
+print(f.area);
