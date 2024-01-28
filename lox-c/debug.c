@@ -27,8 +27,29 @@ static int constantInstruction(const char *name, Chunk *chunk, int offset) {
   return offset + 2;
 }
 
+static int longConstantInstruction(const char *name, Chunk *chunk, int offset) {
+  // A constant instruction is stored in 4 bytes, one for op code and three for
+  // the 24 bit operand.
+  int constant_index = ((int)chunk->code[offset + 3]) << 16;
+  constant_index |= ((int)chunk->code[offset + 2]) << 8;
+  constant_index |= chunk->code[offset + 1];
+
+  printf("%-16s %4d '", name, constant_index);
+  printValue(chunk->constants.values[constant_index]);
+  printf("'\n");
+  return offset + 4;
+}
+
 int disassembleInstruction(Chunk *chunk, int offset) {
   printf("%04d ", offset);
+
+  int previous_line = getLine(chunk, offset - 1);
+  int line = getLine(chunk, offset);
+  if (offset > 0 && line == previous_line) {
+    printf("	| ");
+  } else {
+    printf("%4d ", line);
+  }
 
   uint8_t instruction = chunk->code[offset];
   switch (instruction) {
@@ -36,6 +57,8 @@ int disassembleInstruction(Chunk *chunk, int offset) {
     return simpleInstruction("OP_RETURN", offset);
   case OP_CONSTANT:
     return constantInstruction("OP_CONSTANT", chunk, offset);
+  case OP_CONSTANT_LONG:
+    return longConstantInstruction("OP_CONSTANT_LONG", chunk, offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;
