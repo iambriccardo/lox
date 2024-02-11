@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "common.h"
 #include "scanner.h"
 
 Scanner scanner;
@@ -12,9 +11,9 @@ void initScanner(const char *source) {
   scanner.line = 1;
   for (;;) {
     Token token = scanToken();
-    if (token.line != line) {
+    if (token.line != scanner.line) {
       printf("%4d ", token.line);
-      line = token.line;
+      scanner.line = token.line;
     } else {
       printf("   | ");
     }
