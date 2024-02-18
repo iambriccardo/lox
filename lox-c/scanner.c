@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -9,19 +10,6 @@ void initScanner(const char *source) {
   scanner.start = source;
   scanner.current = source;
   scanner.line = 1;
-  for (;;) {
-    Token token = scanToken();
-    if (token.line != scanner.line) {
-      printf("%4d ", token.line);
-      scanner.line = token.line;
-    } else {
-      printf("   | ");
-    }
-    printf("%2d '%.*s'\n", token.type, token.length, token.start);
-
-    if (token.type == TOKEN_EOF)
-      break;
-  }
 }
 
 static bool isAlpha(char c) {
@@ -246,8 +234,7 @@ Token scanToken() {
     return string();
   case '\n':
     scanner.line++;
-    advance();
-    break;
+    return scanToken();
   }
 
   return errorToken("Unexpected character.");

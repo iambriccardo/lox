@@ -77,13 +77,4 @@ int main(int argc, const char *argv[]) {
     fprintf(stderr, "Usage: clox [path]\n");
     exit(64);
   }
-
-  Chunk chunk;
-  initChunk(&chunk);
-
-  writeProgram(&chunk);
-  interpret(&chunk);
-
-  freeVM();
-  freeChunk(&chunk);
 }
