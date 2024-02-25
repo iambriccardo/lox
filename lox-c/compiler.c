@@ -17,15 +17,17 @@ typedef struct {
 
 typedef enum {
   PREC_NONE,
-  PREC_ASSIGNMENT, // =
-  PREC_OR,         // or
-  PREC_AND,        // and
-  PREC_EQUALITY,   // == !=
-  PREC_COMPARISON, // < > <= >=
-  PREC_TERM,       // + -
-  PREC_FACTOR,     // * /
-  PREC_UNARY,      // ! -
-  PREC_CALL,       // . ()
+  PREC_ASSIGNMENT,    // =
+  PREC_QUESTION_MARK, // ?
+  PREC_COLON,         // :
+  PREC_OR,            // or
+  PREC_AND,           // and
+  PREC_EQUALITY,      // == !=
+  PREC_COMPARISON,    // < > <= >=
+  PREC_TERM,          // + -
+  PREC_FACTOR,        // * /
+  PREC_UNARY,         // ! -
+  PREC_CALL,          // . ()
   PREC_PRIMARY
 } Precedence;
 
@@ -125,6 +127,17 @@ static void expression();
 static ParseRule *getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
 
+static void ternary() {
+  TokenType operatorType = parser.previous.type;
+  ParseRule *rule = getRule(operatorType);
+  parsePrecedence((Precedence)(rule->precedence + 1));
+  advance();
+  parsePrecedence((Precedence)(rule->precedence + 1));
+
+  // TODO: we need to emit a ternary operation here, based on the operator type.
+  printf("EMITTING TERNARY");
+}
+
 static void binary() {
   TokenType operatorType = parser.previous.type;
   ParseRule *rule = getRule(operatorType);
@@ -187,6 +200,8 @@ ParseRule rules[] = {
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
+    [TOKEN_COLON] = {NULL, NULL, PREC_NONE},
+    [TOKEN_QUESTION_MARK] = {NULL, ternary, PREC_QUESTION_MARK},
     [TOKEN_BANG] = {NULL, NULL, PREC_NONE},
     [TOKEN_BANG_EQUAL] = {NULL, NULL, PREC_NONE},
     [TOKEN_EQUAL] = {NULL, NULL, PREC_NONE},

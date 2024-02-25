@@ -7,6 +7,7 @@ typedef enum {
   TOKEN_RIGHT_PAREN,
   TOKEN_LEFT_BRACE,
   TOKEN_RIGHT_BRACE,
+  TOKEN_COLON,
   TOKEN_COMMA,
   TOKEN_DOT,
   TOKEN_MINUS,
@@ -15,6 +16,7 @@ typedef enum {
   TOKEN_SLASH,
   TOKEN_STAR,
   // One or two character tokens.
+  TOKEN_QUESTION_MARK,
   TOKEN_BANG,
   TOKEN_BANG_EQUAL,
   TOKEN_EQUAL,
