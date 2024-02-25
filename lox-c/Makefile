@@ -16,7 +16,7 @@ LDFLAGS = -lm
 # In this section, you list the files that are part of the project.
 # If you add/change names of source files, here is where you
 # edit the Makefile.
-SOURCES = main.c memory.c debug.c chunk.c value.c vm.c compiler.c scanner.c
+SOURCES = main.c memory.c debug.c chunk.c value.c vm.c compiler.c scanner.c object.c
 OBJECTS = $(SOURCES:.c=.o)
 TARGET = clox
 
