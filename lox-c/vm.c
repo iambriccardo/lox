@@ -162,9 +162,12 @@ static InterpretResult run() {
 #undef BINARY_OP
 }
 
-void initVM() { resetStack(); }
+void initVM() {
+  resetStack();
+  vm.objects = NULL;
+}
 
-void freeVM() {}
+void freeVM() { freeObjects(); }
 
 InterpretResult interpret(const char *source) {
   Chunk chunk;
