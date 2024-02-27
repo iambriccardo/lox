@@ -39,9 +39,19 @@ static void concatenate() {
   ObjString *a = AS_STRING(pop());
 
   int length = a->length + b->length;
-  char *chars = ALLOCATE(char, length + 1);
-  memcpy(chars, a->chars, a->length);
-  memcpy(chars + a->length, b->chars, b->length);
+  char chars[length + 1];
+
+  char *aChars = a->chars;
+  if (a->start != NULL) {
+    aChars = (char *)a->start;
+  }
+  char *bChars = b->chars;
+  if (b->start != NULL) {
+    bChars = (char *)b->start;
+  }
+
+  memcpy(chars, aChars, a->length);
+  memcpy(chars + a->length, bChars, b->length);
   chars[length] = '\0';
 
   ObjString *result = takeString(chars, length);
