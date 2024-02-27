@@ -56,12 +56,12 @@ void printObject(Value value) {
   case OBJ_STRING: {
     ObjString *objString = AS_STRING(value);
     if (objString->start != NULL) {
-      printf("referenced:");
+      printf("ref:");
       for (int i = 0; i < objString->length; i++) {
         printf("%c", objString->start[i]);
       }
     } else {
-      printf("copied:");
+      printf("copy:");
       printf("%s", AS_CSTRING(value));
     }
     break;

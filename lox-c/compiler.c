@@ -208,7 +208,6 @@ static void number() {
 }
 
 static void string() {
-  // TODO: here we want to reference the actual original source code.
   emitConstant(OBJ_VAL(
       referenceString(parser.previous.start + 1, parser.previous.length - 2)));
 }
