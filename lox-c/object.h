@@ -11,12 +11,17 @@
 #define AS_STRING(value) ((ObjString *)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString *)AS_OBJ(value))->chars)
 
+#define STRING_CHARS(objString)                                                \
+  objString->start != NULL ? objString->start : objString->chars
+#define IS_REF_STRING(objString) objString->start != NULL
+
 typedef enum {
   OBJ_STRING,
 } ObjType;
 
 struct Obj {
   ObjType type;
+  // Field used to keep track of all allocated objects.
   struct Obj *next;
 };
 

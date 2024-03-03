@@ -27,7 +27,9 @@ static ObjString *allocateString(char chars[], int length, uint32_t hash) {
   string->hash = hash;
   string->length = length;
   strcpy(string->chars, chars);
-  tableSet(&vm.strings, string, NIL_VAL);
+
+  tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
+
   return string;
 }
 
@@ -38,7 +40,9 @@ static ObjString *allocateReferenceString(const char *start, int length,
   string->start = start;
   string->hash = hash;
   string->length = length;
-  tableSet(&vm.strings, string, NIL_VAL);
+
+  tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
+
   return string;
 }
 
@@ -85,7 +89,7 @@ void printObject(Value value) {
   switch (OBJ_TYPE(value)) {
   case OBJ_STRING: {
     ObjString *objString = AS_STRING(value);
-    if (objString->start != NULL) {
+    if (IS_REF_STRING(objString)) {
       printf("ref:");
       for (int i = 0; i < objString->length; i++) {
         printf("%c", objString->start[i]);

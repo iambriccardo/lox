@@ -42,15 +42,8 @@ static void concatenate() {
   int length = a->length + b->length;
   char chars[length + 1];
 
-  char *aChars = a->chars;
-  if (a->start != NULL) {
-    aChars = (char *)a->start;
-  }
-  char *bChars = b->chars;
-  if (b->start != NULL) {
-    bChars = (char *)b->start;
-  }
-
+  const char *aChars = STRING_CHARS(a);
+  const char *bChars = STRING_CHARS(b);
   memcpy(chars, aChars, a->length);
   memcpy(chars + a->length, bChars, b->length);
   chars[length] = '\0';

@@ -61,3 +61,37 @@ bool valuesEqual(Value a, Value b) {
     return false; // Unreachable.
   }
 }
+
+static uint32_t hashString(const char *key, int length) {
+  uint32_t hash = 2166136261u;
+  for (int i = 0; i < length; i++) {
+    hash ^= (uint8_t)key[i];
+    hash *= 16777619;
+  }
+  return hash;
+}
+
+uint32_t valueHash(Value value) {
+  switch (value.type) {
+  case VAL_BOOL:
+    if (AS_BOOL(value) == true) {
+      return 1;
+    } else {
+      return 0;
+    }
+  case VAL_NIL:
+    return 0;
+  case VAL_NUMBER:
+    return ((uint32_t)AS_NUMBER(value));
+  case VAL_OBJ: {
+    if (IS_STRING(value)) {
+      ObjString *objString = AS_STRING(value);
+      return objString->hash;
+    }
+    // TODO: we have to implement hashing for other object types.
+    return 0;
+  }
+  default:
+    return 0;
+  }
+}
