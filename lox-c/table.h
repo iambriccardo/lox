@@ -5,10 +5,6 @@
 #include "object.h"
 #include "value.h"
 
-// TODO: to add multiple data types as key we must:
-// 1. Use `Value` as key
-// 2. Build a function to compute the hash of a value
-// 3. Build a function to compare two values
 typedef struct {
   Value key;
   Value value;
