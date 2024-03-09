@@ -29,7 +29,7 @@ $(TARGET): $(OBJECTS)
 	$(CC) -o $@ $^
 
 run:
-	./$(TARGET)
+	./$(TARGET) main.lox
 
 # Phony means not a "real" target, it doesn't build anything
 # The phony target "clean" is used to remove all compiled object files.

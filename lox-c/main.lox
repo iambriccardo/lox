@@ -1,0 +1,4 @@
+var hello = "hello world";
+print(hello);
+hello = "ciao mondo";
+print(hello);
