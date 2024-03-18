@@ -1,4 +1,10 @@
 var hello = "hello world";
-print(hello);
-hello = "ciao mondo";
-print(hello);
+{
+	var mine = 20;
+	{
+		var lol = 10;
+		print(lol);
+		lol = 50;
+		print(lol);
+	}
+}
