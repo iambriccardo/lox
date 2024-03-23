@@ -1,10 +1,5 @@
-var hello = "hello world";
-{
-	var mine = 20;
-	{
-		var lol = 10;
-		print(lol);
-		lol = 50;
-		print(lol);
-	}
+if (10 > 5) {
+	print("Greater");
+} else {
+	print("Smaller");
 }
