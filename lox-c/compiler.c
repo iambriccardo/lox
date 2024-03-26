@@ -527,15 +527,6 @@ static void switchCaseExpression(bool is_default_case) {
   }
 }
 
-// EXPR
-// EXPR OF CASE 1
-// OP_CASE_EQUAL
-// JUMP IF FALSE (NEXT CASE)
-// STATEMENTS OF CASE
-// EXPR OF CASE 2
-// ...
-// STATEMENTS OF DEFAULT CASE
-// EXIT
 static void switchStatement() {
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
   expression();
@@ -543,6 +534,9 @@ static void switchStatement() {
 
   consume(TOKEN_LEFT_BRACE, "Expect '{' after 'switch' condition.");
 
+  // COLLECT ALL INDEXES OF BREAK STATEMENTS WHICH ARE JUST JUMPS
+  ValueArray breakJumps;
+  initValueArray(&breakJumps);
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
     if (match(TOKEN_CASE)) {
       switchCaseExpression(false);
@@ -550,6 +544,8 @@ static void switchStatement() {
       switchCaseExpression(true);
     }
   }
+
+  // PATCH EACH JUMP
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after 'switch' statement.");
 }
