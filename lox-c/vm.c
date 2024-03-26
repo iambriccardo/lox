@@ -152,6 +152,15 @@ static InterpretResult run() {
       pop();
       break;
     }
+    case OP_SWITCH_CASE_EQUAL: {
+      // This operation does read and compare the top two values of the stack
+      // without popping them. It's a special operation that aims at making
+      // switch cases faster.
+      Value b = peek(0);
+      Value a = peek(1);
+      push(BOOL_VAL(valuesEqual(a, b)));
+      break;
+    }
     case OP_EQUAL: {
       Value b = pop();
       Value a = pop();

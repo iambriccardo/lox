@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,16 +96,16 @@ static void advance() {
   }
 }
 
+static bool check(TokenType type) { return parser.current.type == type; }
+
 static void consume(TokenType type, const char *message) {
-  if (parser.current.type == type) {
+  if (check(type)) {
     advance();
     return;
   }
 
   errorAtCurrent(message);
 }
-
-static bool check(TokenType type) { return parser.current.type == type; }
 
 static bool match(TokenType type) {
   if (!check(type))
@@ -501,6 +502,58 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
+static void switchCaseExpression(bool is_default_case) {
+  if (!is_default_case) {
+    expression();
+  }
+  consume(TOKEN_COLON, "Expect ':' after switch case expression.");
+
+  if (!is_default_case) {
+    emitByte(OP_SWITCH_CASE_EQUAL);
+    int nextCaseJump = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP); // Condition.
+    emitByte(OP_POP); // Case expression.
+
+    statement();
+
+    int skipJump = emitJump(OP_JUMP);
+    patchJump(nextCaseJump);
+    emitByte(OP_POP); // Condition.
+    emitByte(OP_POP); // Case expression.
+
+    patchJump(skipJump);
+  } else {
+    statement();
+  }
+}
+
+// EXPR
+// EXPR OF CASE 1
+// OP_CASE_EQUAL
+// JUMP IF FALSE (NEXT CASE)
+// STATEMENTS OF CASE
+// EXPR OF CASE 2
+// ...
+// STATEMENTS OF DEFAULT CASE
+// EXIT
+static void switchStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after 'switch' condition.");
+
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    if (match(TOKEN_CASE)) {
+      switchCaseExpression(false);
+    } else if (match(TOKEN_DEFAULT)) {
+      switchCaseExpression(true);
+    }
+  }
+
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after 'switch' statement.");
+}
+
 static void forStatement() {
   beginScope();
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
@@ -639,6 +692,8 @@ static void statement() {
     beginScope();
     block();
     endScope();
+  } else if (match(TOKEN_SWITCH)) {
+    switchStatement();
   } else {
     expressionStatement();
   }

@@ -1,5 +1,13 @@
-var i = 0;
+var i = "hello";
 
-for (i = 0; i < 10; i = i + 1) {
-	print(i);
+switch (i) {
+	case "hello": {
+		print("ciao");
+	}
+	case "world": {
+		print("mondo");
+	}
+	default: {
+		print("Hit default");
+	}
 }
