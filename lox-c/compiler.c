@@ -54,6 +54,24 @@ typedef struct {
   int scopeDepth;
 } Compiler;
 
+typedef enum { BREAK, CONTINUE } InterruptorType;
+
+typedef struct {
+  InterruptorType type;
+  int position;
+} Interruptor;
+
+typedef struct {
+  Interruptor interruptors[100];
+  int count;
+} Interruptors;
+
+#define BREAK_INTERRUPTOR(p) ((Interruptor){.type = BREAK, .position = p})
+#define CONTINUE_INTERRUPTOR(p) ((Interruptor){.type = CONTINUE, .position = p})
+
+#define BUILD_INTERRUPTORS(i, c) ((Interruptors){.interruptors = i, .count = c})
+#define NO_INTERRUPTORS BUILD_INTERRUPTORS({}, 0)
+
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
@@ -198,8 +216,8 @@ static void endScope() {
 }
 
 static void expression();
-static void statement();
-static void declaration();
+static Interruptors statement();
+static Interruptors declaration();
 static ParseRule *getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
 
@@ -475,12 +493,16 @@ ParseRule rules[] = {
 
 static void expression() { parsePrecedence(PREC_ASSIGNMENT); }
 
-static void block() {
+static Interruptors block() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
     declaration();
   }
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+
+  return interruptors;
 }
 
 static void varDeclaration() {
@@ -502,7 +524,9 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
-static void switchCaseExpression(bool is_default_case) {
+static Interruptors switchCaseExpression(bool is_default_case) {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   if (!is_default_case) {
     expression();
   }
@@ -525,9 +549,13 @@ static void switchCaseExpression(bool is_default_case) {
   } else {
     statement();
   }
+
+  return interruptors;
 }
 
-static void switchStatement() {
+static Interruptors switchStatement() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
@@ -545,9 +573,9 @@ static void switchStatement() {
     }
   }
 
-  // PATCH EACH JUMP
-
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after 'switch' statement.");
+
+  return interruptors;
 }
 
 static void forStatement() {
@@ -597,7 +625,9 @@ static void forStatement() {
   endScope();
 }
 
-static void ifStatement() {
+static Interruptors ifStatement() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
@@ -615,6 +645,8 @@ static void ifStatement() {
     statement();
   }
   patchJump(elseJump);
+
+  return interruptors;
 }
 
 static void printStatement() {
@@ -646,6 +678,7 @@ static void synchronize() {
       return;
 
     switch (parser.current.type) {
+    case TOKEN_SWITCH:
     case TOKEN_CLASS:
     case TOKEN_FUN:
     case TOKEN_VAR:
@@ -663,36 +696,51 @@ static void synchronize() {
   }
 }
 
-static void declaration() {
+static Interruptors declaration() {
+  Interruptors interruptors = NO_INTERRUPTORS;
   if (match(TOKEN_VAR)) {
     varDeclaration();
   } else {
-    statement();
+    interruptors = statement();
   }
 
   if (parser.panicMode) {
     synchronize();
   }
+
+  return interruptors;
 }
 
-static void statement() {
+static Interruptors statement() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   if (match(TOKEN_PRINT)) {
     printStatement();
   } else if (match(TOKEN_FOR)) {
     forStatement();
   } else if (match(TOKEN_IF)) {
-    ifStatement();
+    interruptors = ifStatement();
   } else if (match(TOKEN_WHILE)) {
     whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
-    block();
+    interruptors = block();
     endScope();
   } else if (match(TOKEN_SWITCH)) {
-    switchStatement();
+    interruptors = switchStatement();
+  } else if (match(TOKEN_BREAK)) {
+    int breakJump = emitJump(OP_JUMP);
+    Interruptor breakInterruptor = BREAK_INTERRUPTOR(breakJump);
+    interruptors = BUILD_INTERRUPTORS({breakInterruptor}, 1);
+  } else if (match(TOKEN_CONTINUE)) {
+    int continueJump = emitJump(OP_JUMP);
+    Interruptor continueInterruptor = CONTINUE_INTERRUPTOR(continueJump);
+    interruptors = BUILD_INTERRUPTORS({continueInterruptor}, 1);
   } else {
     expressionStatement();
   }
+
+  return interruptors;
 }
 
 static ParseRule *getRule(TokenType type) { return &rules[type]; }
