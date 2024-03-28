@@ -62,7 +62,8 @@ typedef struct {
 } Interruptor;
 
 typedef struct {
-  Interruptor interruptors[100];
+  // For now we temporarily want to store at most 256 interruptors.
+  Interruptor interruptors[256];
   int count;
 } Interruptors;
 
@@ -75,6 +76,14 @@ typedef struct {
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
+
+static Interruptors mergeInterruptors(Interruptors a, Interruptors b) {
+  for (int i = 0; i < b.count; i++) {
+    a.interruptors[a.count] = b.interruptors[i];
+    a.count++;
+  }
+  return a;
+}
 
 static Chunk *currentChunk() { return compilingChunk; }
 
@@ -497,7 +506,7 @@ static Interruptors block() {
   Interruptors interruptors = NO_INTERRUPTORS;
 
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
-    declaration();
+    interruptors = mergeInterruptors(interruptors, declaration());
   }
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
