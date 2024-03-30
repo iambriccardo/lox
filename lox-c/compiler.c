@@ -56,6 +56,8 @@ typedef struct {
 
 typedef enum { BREAK, CONTINUE } InterruptorType;
 
+typedef enum { NONE, SWITCH_STATEMENT } EnclosingContext;
+
 typedef struct {
   InterruptorType type;
   int position;
@@ -76,11 +78,11 @@ typedef struct {
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
+EnclosingContext enclosingContext = NONE;
 
 static Interruptors mergeInterruptors(Interruptors a, Interruptors b) {
   for (int i = 0; i < b.count; i++) {
-    a.interruptors[a.count] = b.interruptors[i];
-    a.count++;
+    a.interruptors[a.count++] = b.interruptors[i];
   }
   return a;
 }
@@ -150,7 +152,7 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
   emitByte(byte2);
 }
 
-static void emitLoop(int loopStart) {
+static int emitLoop(int loopStart) {
   emitByte(OP_LOOP);
 
   int offset = currentChunk()->count - loopStart + 2;
@@ -158,14 +160,22 @@ static void emitLoop(int loopStart) {
     errorAtCurrent("Loop body too large.");
   }
 
-  emitByte((offset >> 8) & 0xff);
-  emitByte(offset & 0xff);
+  if (loopStart == -1) {
+    emitByte(0xff);
+    emitByte(0xff);
+  } else {
+    emitByte((offset >> 8) & 0xff);
+    emitByte(offset & 0xff);
+  }
+
+  return currentChunk()->count - 2;
 }
 
 static int emitJump(uint8_t instruction) {
   emitByte(instruction);
   emitByte(0xff);
   emitByte(0xff);
+
   return currentChunk()->count - 2;
 }
 
@@ -191,6 +201,18 @@ static void patchJump(int offset) {
 
   if (jump > UINT16_MAX) {
     errorAtCurrent("Too much code to jump over.");
+  }
+
+  currentChunk()->code[offset] = (jump >> 8) & 0xff;
+  currentChunk()->code[offset + 1] = jump & 0xff;
+}
+
+static void patchLoop(int offset, int loopStart) {
+  // -2 to adjust for the bytecode for the jump offset itself.
+  int jump = offset - loopStart + 2;
+
+  if (jump > UINT16_MAX) {
+    errorAtCurrent("Too much code to loop over.");
   }
 
   currentChunk()->code[offset] = (jump >> 8) & 0xff;
@@ -498,6 +520,8 @@ ParseRule rules[] = {
     [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
+    [TOKEN_BREAK] = {NULL, NULL, PREC_NONE},
+    [TOKEN_CONTINUE] = {NULL, NULL, PREC_NONE},
 };
 
 static void expression() { parsePrecedence(PREC_ASSIGNMENT); }
@@ -547,7 +571,7 @@ static Interruptors switchCaseExpression(bool is_default_case) {
     emitByte(OP_POP); // Condition.
     emitByte(OP_POP); // Case expression.
 
-    statement();
+    interruptors = statement();
 
     int skipJump = emitJump(OP_JUMP);
     patchJump(nextCaseJump);
@@ -556,7 +580,7 @@ static Interruptors switchCaseExpression(bool is_default_case) {
 
     patchJump(skipJump);
   } else {
-    statement();
+    interruptors = statement();
   }
 
   return interruptors;
@@ -571,20 +595,31 @@ static Interruptors switchStatement() {
 
   consume(TOKEN_LEFT_BRACE, "Expect '{' after 'switch' condition.");
 
-  // COLLECT ALL INDEXES OF BREAK STATEMENTS WHICH ARE JUST JUMPS
-  ValueArray breakJumps;
-  initValueArray(&breakJumps);
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
     if (match(TOKEN_CASE)) {
-      switchCaseExpression(false);
+      interruptors =
+          mergeInterruptors(interruptors, switchCaseExpression(false));
     } else if (match(TOKEN_DEFAULT)) {
-      switchCaseExpression(true);
+      interruptors =
+          mergeInterruptors(interruptors, switchCaseExpression(true));
     }
   }
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after 'switch' statement.");
 
-  return interruptors;
+  emitByte(OP_POP);
+
+  Interruptors filteredInterruptors = NO_INTERRUPTORS;
+  for (int i = 0; i < interruptors.count; i++) {
+    if (interruptors.interruptors[i].type == BREAK) {
+      patchJump(interruptors.interruptors[i].position);
+    } else {
+      filteredInterruptors.interruptors[filteredInterruptors.count++] =
+          interruptors.interruptors[i];
+    }
+  }
+
+  return filteredInterruptors;
 }
 
 static void forStatement() {
@@ -623,12 +658,21 @@ static void forStatement() {
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
   }
 
-  statement();
+  Interruptors interruptors = statement();
   emitLoop(loopStart);
 
   if (exitJump != -1) {
     patchJump(exitJump);
     emitByte(OP_POP); // Condition.
+  }
+
+  for (int i = 0; i < interruptors.count; i++) {
+    InterruptorType type = interruptors.interruptors[i].type;
+    if (type == BREAK) {
+      patchJump(interruptors.interruptors[i].position);
+    } else if (type == CONTINUE) {
+      patchLoop(interruptors.interruptors[i].position, loopStart);
+    }
   }
 
   endScope();
@@ -643,7 +687,7 @@ static Interruptors ifStatement() {
 
   int thenJump = emitJump(OP_JUMP_IF_FALSE);
   emitByte(OP_POP);
-  statement();
+  interruptors = statement();
 
   int elseJump = emitJump(OP_JUMP);
 
@@ -651,7 +695,7 @@ static Interruptors ifStatement() {
   emitByte(OP_POP);
 
   if (match(TOKEN_ELSE)) {
-    statement();
+    interruptors = mergeInterruptors(interruptors, statement());
   }
   patchJump(elseJump);
 
@@ -672,11 +716,20 @@ static void whileStatement() {
 
   int exitJump = emitJump(OP_JUMP_IF_FALSE);
   emitByte(OP_POP);
-  statement();
+  Interruptors interruptors = statement();
   emitLoop(loopStart);
 
   patchJump(exitJump);
   emitByte(OP_POP);
+
+  for (int i = 0; i < interruptors.count; i++) {
+    InterruptorType type = interruptors.interruptors[i].type;
+    if (type == BREAK) {
+      patchJump(interruptors.interruptors[i].position);
+    } else if (type == CONTINUE) {
+      patchLoop(interruptors.interruptors[i].position, loopStart);
+    }
+  }
 }
 
 static void synchronize() {
@@ -720,8 +773,29 @@ static Interruptors declaration() {
   return interruptors;
 }
 
+static Interruptors interruptorStatement(InterruptorType interruptorType) {
+  consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
+
+  Interruptors interruptors = NO_INTERRUPTORS;
+  if (interruptorType == BREAK) {
+    interruptors =
+        BUILD_INTERRUPTORS({BREAK_INTERRUPTOR(emitJump(OP_JUMP))}, 1);
+  } else if (interruptorType == CONTINUE) {
+    // If we have a 'continue' statement and it is enclosed within a specific
+    // enclosing context, we want to run the specific cleanup for that
+    // context.
+    if (enclosingContext == SWITCH_STATEMENT) {
+      emitByte(OP_POP);
+    }
+    interruptors = BUILD_INTERRUPTORS({CONTINUE_INTERRUPTOR(emitLoop(-1))}, 1);
+  }
+
+  return interruptors;
+}
+
 static Interruptors statement() {
   Interruptors interruptors = NO_INTERRUPTORS;
+  EnclosingContext prevEnclosingContext = enclosingContext;
 
   if (match(TOKEN_PRINT)) {
     printStatement();
@@ -736,18 +810,17 @@ static Interruptors statement() {
     interruptors = block();
     endScope();
   } else if (match(TOKEN_SWITCH)) {
+    enclosingContext = SWITCH_STATEMENT;
     interruptors = switchStatement();
   } else if (match(TOKEN_BREAK)) {
-    int breakJump = emitJump(OP_JUMP);
-    Interruptor breakInterruptor = BREAK_INTERRUPTOR(breakJump);
-    interruptors = BUILD_INTERRUPTORS({breakInterruptor}, 1);
+    interruptors = interruptorStatement(BREAK);
   } else if (match(TOKEN_CONTINUE)) {
-    int continueJump = emitJump(OP_JUMP);
-    Interruptor continueInterruptor = CONTINUE_INTERRUPTOR(continueJump);
-    interruptors = BUILD_INTERRUPTORS({continueInterruptor}, 1);
+    interruptors = interruptorStatement(CONTINUE);
   } else {
     expressionStatement();
   }
+
+  enclosingContext = prevEnclosingContext;
 
   return interruptors;
 }
