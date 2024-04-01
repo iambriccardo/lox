@@ -740,11 +740,11 @@ static void forStatement() {
   // We now patch all the jumps and loops that were defined via interruptor
   // statements.
   for (int i = 0; i < interruptors.count; i++) {
-    InterruptorType type = interruptors.interruptors[i].type;
-    if (type == BREAK) {
-      patchJump(interruptors.interruptors[i].position);
-    } else if (type == CONTINUE) {
-      patchLoop(interruptors.interruptors[i].position, loopStart);
+    Interruptor interruptor = interruptors.interruptors[i];
+    if (interruptor.type == BREAK) {
+      patchJump(interruptor.position);
+    } else if (interruptor.type == CONTINUE) {
+      patchLoop(interruptor.position, loopStart);
     }
   }
 
@@ -801,17 +801,18 @@ static void whileStatement() {
   Interruptors interruptors = statement();
   emitLoop(loopStart);
 
-  patchJump(exitJump);
-
+  // We now patch all the jumps and loops that were defined via interruptor
+  // statements.
   for (int i = 0; i < interruptors.count; i++) {
-    InterruptorType type = interruptors.interruptors[i].type;
-    if (type == BREAK) {
-      patchJump(interruptors.interruptors[i].position);
-    } else if (type == CONTINUE) {
-      patchLoop(interruptors.interruptors[i].position, loopStart);
+    Interruptor interruptor = interruptors.interruptors[i];
+    if (interruptor.type == BREAK) {
+      patchJump(interruptor.position);
+    } else if (interruptor.type == CONTINUE) {
+      patchLoop(interruptor.position, loopStart);
     }
   }
 
+  patchJump(exitJump);
   emitByte(OP_POP); // Condition.
 }
 
