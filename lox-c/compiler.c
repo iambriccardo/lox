@@ -56,7 +56,14 @@ typedef struct {
 
 typedef enum { BREAK, CONTINUE } InterruptorType;
 
-typedef enum { NONE, SWITCH_STATEMENT } EnclosingContext;
+typedef enum {
+  NONE,
+  SWITCH_STATEMENT,
+  WHILE_STATEMENT,
+  FOR_STATEMENT,
+  BLOCK_STATEMENT,
+  IF_STATEMENT
+} EnclosingContext;
 
 typedef struct {
   InterruptorType type;
@@ -78,14 +85,9 @@ typedef struct {
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
-EnclosingContext enclosingContext = NONE;
 
-static Interruptors mergeInterruptors(Interruptors a, Interruptors b) {
-  for (int i = 0; i < b.count; i++) {
-    a.interruptors[a.count++] = b.interruptors[i];
-  }
-  return a;
-}
+int enclosingContextsCount = 0;
+EnclosingContext enclosingContexts[256];
 
 static Chunk *currentChunk() { return compilingChunk; }
 
@@ -244,6 +246,66 @@ static void endScope() {
     emitByte(OP_POP);
     current->localCount--;
   }
+}
+
+static Interruptors mergeInterruptors(Interruptors a, Interruptors b) {
+  for (int i = 0; i < b.count; i++) {
+    a.interruptors[a.count++] = b.interruptors[i];
+  }
+  return a;
+}
+
+static void addEnclosingContext(EnclosingContext enclosingContext) {
+  enclosingContexts[enclosingContextsCount++] = enclosingContext;
+}
+
+static void removeEnclosingContext() {
+  if (enclosingContextsCount == 0) {
+    return;
+  }
+
+  enclosingContexts[enclosingContextsCount - 1] = NONE;
+  enclosingContextsCount--;
+}
+
+static void validateInterruptor(InterruptorType interruptorType) {
+  for (int i = enclosingContextsCount - 1; i >= 0; i--) {
+    EnclosingContext enclosingContext = enclosingContexts[i];
+    if (interruptorType == BREAK && (enclosingContext == FOR_STATEMENT ||
+                                     enclosingContext == WHILE_STATEMENT ||
+                                     enclosingContext == SWITCH_STATEMENT)) {
+      return;
+    } else if (interruptorType == CONTINUE &&
+               (enclosingContext == FOR_STATEMENT ||
+                enclosingContext == WHILE_STATEMENT)) {
+      return;
+    }
+  }
+
+  if (interruptorType == BREAK) {
+    errorAtCurrent("The 'break' statement can't be defined here");
+  } else if (interruptorType == CONTINUE) {
+    errorAtCurrent("The 'continue' statement can't be defined here");
+  }
+}
+
+static void unwindEnclosingContexts(InterruptorType interruptorType) {
+  for (int i = enclosingContextsCount - 1; i >= 0; i--) {
+    EnclosingContext enclosingContext = enclosingContexts[i];
+    if (enclosingContext == BLOCK_STATEMENT) {
+      endScope();
+    } else {
+      // This is an edge case, since the 'continue' statement doesn't refer to a
+      // switch statement but rahter to the innermost 'while' or 'for' loop and
+      // since we do not jump to the end of the statement where it is
+      // destructed, we want to pop the condition of the 'switch' statement.
+      if (enclosingContext == SWITCH_STATEMENT && interruptorType == CONTINUE) {
+        emitByte(OP_POP); // 'switch' condition.
+      }
+
+      break;
+    }
+  };
 }
 
 static void expression();
@@ -607,8 +669,6 @@ static Interruptors switchStatement() {
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after 'switch' statement.");
 
-  emitByte(OP_POP);
-
   Interruptors filteredInterruptors = NO_INTERRUPTORS;
   for (int i = 0; i < interruptors.count; i++) {
     if (interruptors.interruptors[i].type == BREAK) {
@@ -618,6 +678,8 @@ static Interruptors switchStatement() {
           interruptors.interruptors[i];
     }
   }
+
+  emitByte(OP_POP); // Condition.
 
   return filteredInterruptors;
 }
@@ -661,11 +723,6 @@ static void forStatement() {
   Interruptors interruptors = statement();
   emitLoop(loopStart);
 
-  if (exitJump != -1) {
-    patchJump(exitJump);
-    emitByte(OP_POP); // Condition.
-  }
-
   for (int i = 0; i < interruptors.count; i++) {
     InterruptorType type = interruptors.interruptors[i].type;
     if (type == BREAK) {
@@ -673,6 +730,11 @@ static void forStatement() {
     } else if (type == CONTINUE) {
       patchLoop(interruptors.interruptors[i].position, loopStart);
     }
+  }
+
+  if (exitJump != -1) {
+    patchJump(exitJump);
+    emitByte(OP_POP); // Condition.
   }
 
   endScope();
@@ -686,13 +748,14 @@ static Interruptors ifStatement() {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
   int thenJump = emitJump(OP_JUMP_IF_FALSE);
-  emitByte(OP_POP);
+  emitByte(OP_POP); // Condition.
+
   interruptors = statement();
 
   int elseJump = emitJump(OP_JUMP);
 
   patchJump(thenJump);
-  emitByte(OP_POP);
+  emitByte(OP_POP); // Condition.
 
   if (match(TOKEN_ELSE)) {
     interruptors = mergeInterruptors(interruptors, statement());
@@ -715,12 +778,12 @@ static void whileStatement() {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
   int exitJump = emitJump(OP_JUMP_IF_FALSE);
-  emitByte(OP_POP);
+  emitByte(OP_POP); // Condition.
+
   Interruptors interruptors = statement();
   emitLoop(loopStart);
 
   patchJump(exitJump);
-  emitByte(OP_POP);
 
   for (int i = 0; i < interruptors.count; i++) {
     InterruptorType type = interruptors.interruptors[i].type;
@@ -730,6 +793,8 @@ static void whileStatement() {
       patchLoop(interruptors.interruptors[i].position, loopStart);
     }
   }
+
+  emitByte(OP_POP); // Condition.
 }
 
 static void synchronize() {
@@ -776,17 +841,19 @@ static Interruptors declaration() {
 static Interruptors interruptorStatement(InterruptorType interruptorType) {
   consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
 
+  // We check whether the interruptor can be defined consider the enclosing
+  // contexts.
+  validateInterruptor(interruptorType);
+
+  // For each enclosing context, we emit the byte code necessary to correclty
+  // unwind.
+  unwindEnclosingContexts(interruptorType);
+
   Interruptors interruptors = NO_INTERRUPTORS;
   if (interruptorType == BREAK) {
     interruptors =
         BUILD_INTERRUPTORS({BREAK_INTERRUPTOR(emitJump(OP_JUMP))}, 1);
   } else if (interruptorType == CONTINUE) {
-    // If we have a 'continue' statement and it is enclosed within a specific
-    // enclosing context, we want to run the specific cleanup for that
-    // context.
-    if (enclosingContext == SWITCH_STATEMENT) {
-      emitByte(OP_POP);
-    }
     interruptors = BUILD_INTERRUPTORS({CONTINUE_INTERRUPTOR(emitLoop(-1))}, 1);
   }
 
@@ -795,22 +862,25 @@ static Interruptors interruptorStatement(InterruptorType interruptorType) {
 
 static Interruptors statement() {
   Interruptors interruptors = NO_INTERRUPTORS;
-  EnclosingContext prevEnclosingContext = enclosingContext;
 
   if (match(TOKEN_PRINT)) {
     printStatement();
   } else if (match(TOKEN_FOR)) {
+    addEnclosingContext(FOR_STATEMENT);
     forStatement();
   } else if (match(TOKEN_IF)) {
+    addEnclosingContext(IF_STATEMENT);
     interruptors = ifStatement();
   } else if (match(TOKEN_WHILE)) {
+    addEnclosingContext(WHILE_STATEMENT);
     whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
+    addEnclosingContext(BLOCK_STATEMENT);
     interruptors = block();
     endScope();
   } else if (match(TOKEN_SWITCH)) {
-    enclosingContext = SWITCH_STATEMENT;
+    addEnclosingContext(SWITCH_STATEMENT);
     interruptors = switchStatement();
   } else if (match(TOKEN_BREAK)) {
     interruptors = interruptorStatement(BREAK);
@@ -819,8 +889,7 @@ static Interruptors statement() {
   } else {
     expressionStatement();
   }
-
-  enclosingContext = prevEnclosingContext;
+  removeEnclosingContext();
 
   return interruptors;
 }
