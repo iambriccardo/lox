@@ -71,8 +71,7 @@ typedef struct {
 } Interruptor;
 
 typedef struct {
-  // For now we temporarily want to store at most 256 interruptors.
-  Interruptor interruptors[256];
+  Interruptor interruptors[UINT8_COUNT];
   int count;
 } Interruptors;
 
@@ -87,7 +86,7 @@ Compiler *current = NULL;
 Chunk *compilingChunk;
 
 int enclosingContextsCount = 0;
-EnclosingContext enclosingContexts[256];
+EnclosingContext enclosingContexts[UINT8_COUNT];
 
 static Chunk *currentChunk() { return compilingChunk; }
 
@@ -293,7 +292,12 @@ static void unwindEnclosingContexts(InterruptorType interruptorType) {
   for (int i = enclosingContextsCount - 1; i >= 0; i--) {
     EnclosingContext enclosingContext = enclosingContexts[i];
     if (enclosingContext == BLOCK_STATEMENT) {
-      endScope();
+      // We remove all locals at this depth.
+      while (current->localCount > 0 &&
+             current->locals[current->localCount - 1].depth >=
+                 current->scopeDepth) {
+        emitByte(OP_POP);
+      }
     } else {
       // This is an edge case, since the 'continue' statement doesn't refer to a
       // switch statement but rahter to the innermost 'while' or 'for' loop and
@@ -723,6 +727,8 @@ static void forStatement() {
   Interruptors interruptors = statement();
   emitLoop(loopStart);
 
+  // We now patch all the jumps and loops that were defined via interruptor
+  // statements.
   for (int i = 0; i < interruptors.count; i++) {
     InterruptorType type = interruptors.interruptors[i].type;
     if (type == BREAK) {
@@ -762,6 +768,8 @@ static Interruptors ifStatement() {
   }
   patchJump(elseJump);
 
+  // The 'if' statement doesn't "capture" any interruptor, thus we forward them
+  // upstream.
   return interruptors;
 }
 
@@ -868,20 +876,25 @@ static Interruptors statement() {
   } else if (match(TOKEN_FOR)) {
     addEnclosingContext(FOR_STATEMENT);
     forStatement();
+    removeEnclosingContext();
   } else if (match(TOKEN_IF)) {
     addEnclosingContext(IF_STATEMENT);
     interruptors = ifStatement();
+    removeEnclosingContext();
   } else if (match(TOKEN_WHILE)) {
     addEnclosingContext(WHILE_STATEMENT);
     whileStatement();
+    removeEnclosingContext();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     addEnclosingContext(BLOCK_STATEMENT);
     interruptors = block();
+    removeEnclosingContext();
     endScope();
   } else if (match(TOKEN_SWITCH)) {
     addEnclosingContext(SWITCH_STATEMENT);
     interruptors = switchStatement();
+    removeEnclosingContext();
   } else if (match(TOKEN_BREAK)) {
     interruptors = interruptorStatement(BREAK);
   } else if (match(TOKEN_CONTINUE)) {
@@ -889,7 +902,6 @@ static Interruptors statement() {
   } else {
     expressionStatement();
   }
-  removeEnclosingContext();
 
   return interruptors;
 }
