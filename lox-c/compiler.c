@@ -263,6 +263,11 @@ static void removeEnclosingContext() {
     return;
   }
 
+  if (enclosingContextsCount == UINT8_COUNT) {
+    errorAtCurrent("Too many nested contexts");
+    return;
+  }
+
   enclosingContexts[enclosingContextsCount - 1] = NONE;
   enclosingContextsCount--;
 }
