@@ -606,6 +606,8 @@ static Interruptors block() {
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 
+  // The block statement doesn't "capture" any interruptors, thus we forward
+  // them upstream.
   return interruptors;
 }
 
@@ -678,19 +680,22 @@ static Interruptors switchStatement() {
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after 'switch' statement.");
 
-  Interruptors filteredInterruptors = NO_INTERRUPTORS;
+  // We forward the 'continue' interruptor upstream since it's not supported by
+  // the 'switch' statement.
+  Interruptors unsupportedInterruptors = NO_INTERRUPTORS;
   for (int i = 0; i < interruptors.count; i++) {
-    if (interruptors.interruptors[i].type == BREAK) {
-      patchJump(interruptors.interruptors[i].position);
-    } else {
-      filteredInterruptors.interruptors[filteredInterruptors.count++] =
-          interruptors.interruptors[i];
+    Interruptor interruptor = interruptors.interruptors[i];
+    if (interruptor.type == BREAK) {
+      patchJump(interruptor.position);
+    } else if (interruptor.type == CONTINUE) {
+      unsupportedInterruptors.interruptors[unsupportedInterruptors.count++] =
+          interruptor;
     }
   }
 
   emitByte(OP_POP); // Condition.
 
-  return filteredInterruptors;
+  return unsupportedInterruptors;
 }
 
 static void forStatement() {
@@ -773,7 +778,7 @@ static Interruptors ifStatement() {
   }
   patchJump(elseJump);
 
-  // The 'if' statement doesn't "capture" any interruptor, thus we forward them
+  // The 'if' statement doesn't "capture" any interruptors, thus we forward them
   // upstream.
   return interruptors;
 }
