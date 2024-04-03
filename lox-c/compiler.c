@@ -54,9 +54,39 @@ typedef struct {
   int scopeDepth;
 } Compiler;
 
+typedef enum { BREAK, CONTINUE } InterruptorType;
+
+typedef enum {
+  NONE,
+  SWITCH_STATEMENT,
+  WHILE_STATEMENT,
+  FOR_STATEMENT,
+  BLOCK_STATEMENT,
+  IF_STATEMENT
+} EnclosingContext;
+
+typedef struct {
+  InterruptorType type;
+  int position;
+} Interruptor;
+
+typedef struct {
+  Interruptor interruptors[UINT8_COUNT];
+  int count;
+} Interruptors;
+
+#define BREAK_INTERRUPTOR(p) ((Interruptor){.type = BREAK, .position = p})
+#define CONTINUE_INTERRUPTOR(p) ((Interruptor){.type = CONTINUE, .position = p})
+
+#define BUILD_INTERRUPTORS(i, c) ((Interruptors){.interruptors = i, .count = c})
+#define NO_INTERRUPTORS BUILD_INTERRUPTORS({}, 0)
+
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
+
+int enclosingContextsCount = 0;
+EnclosingContext enclosingContexts[UINT8_COUNT];
 
 static Chunk *currentChunk() { return compilingChunk; }
 
@@ -123,7 +153,7 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
   emitByte(byte2);
 }
 
-static void emitLoop(int loopStart) {
+static int emitLoop(int loopStart) {
   emitByte(OP_LOOP);
 
   int offset = currentChunk()->count - loopStart + 2;
@@ -131,14 +161,22 @@ static void emitLoop(int loopStart) {
     errorAtCurrent("Loop body too large.");
   }
 
-  emitByte((offset >> 8) & 0xff);
-  emitByte(offset & 0xff);
+  if (loopStart == -1) {
+    emitByte(0xff);
+    emitByte(0xff);
+  } else {
+    emitByte((offset >> 8) & 0xff);
+    emitByte(offset & 0xff);
+  }
+
+  return currentChunk()->count - 2;
 }
 
 static int emitJump(uint8_t instruction) {
   emitByte(instruction);
   emitByte(0xff);
   emitByte(0xff);
+
   return currentChunk()->count - 2;
 }
 
@@ -164,6 +202,18 @@ static void patchJump(int offset) {
 
   if (jump > UINT16_MAX) {
     errorAtCurrent("Too much code to jump over.");
+  }
+
+  currentChunk()->code[offset] = (jump >> 8) & 0xff;
+  currentChunk()->code[offset + 1] = jump & 0xff;
+}
+
+static void patchLoop(int offset, int loopStart) {
+  // -2 to adjust for the bytecode for the jump offset itself.
+  int jump = offset - loopStart + 2;
+
+  if (jump > UINT16_MAX) {
+    errorAtCurrent("Too much code to loop over.");
   }
 
   currentChunk()->code[offset] = (jump >> 8) & 0xff;
@@ -197,9 +247,79 @@ static void endScope() {
   }
 }
 
+static Interruptors mergeInterruptors(Interruptors a, Interruptors b) {
+  for (int i = 0; i < b.count; i++) {
+    a.interruptors[a.count++] = b.interruptors[i];
+  }
+  return a;
+}
+
+static void addEnclosingContext(EnclosingContext enclosingContext) {
+  enclosingContexts[enclosingContextsCount++] = enclosingContext;
+}
+
+static void removeEnclosingContext() {
+  if (enclosingContextsCount == 0) {
+    return;
+  }
+
+  if (enclosingContextsCount == UINT8_COUNT) {
+    errorAtCurrent("Too many nested contexts");
+    return;
+  }
+
+  enclosingContexts[enclosingContextsCount - 1] = NONE;
+  enclosingContextsCount--;
+}
+
+static void validateInterruptor(InterruptorType interruptorType) {
+  for (int i = enclosingContextsCount - 1; i >= 0; i--) {
+    EnclosingContext enclosingContext = enclosingContexts[i];
+    if (interruptorType == BREAK && (enclosingContext == FOR_STATEMENT ||
+                                     enclosingContext == WHILE_STATEMENT ||
+                                     enclosingContext == SWITCH_STATEMENT)) {
+      return;
+    } else if (interruptorType == CONTINUE &&
+               (enclosingContext == FOR_STATEMENT ||
+                enclosingContext == WHILE_STATEMENT)) {
+      return;
+    }
+  }
+
+  if (interruptorType == BREAK) {
+    errorAtCurrent("The 'break' statement can't be defined here");
+  } else if (interruptorType == CONTINUE) {
+    errorAtCurrent("The 'continue' statement can't be defined here");
+  }
+}
+
+static void unwindEnclosingContexts(InterruptorType interruptorType) {
+  for (int i = enclosingContextsCount - 1; i >= 0; i--) {
+    EnclosingContext enclosingContext = enclosingContexts[i];
+    if (enclosingContext == BLOCK_STATEMENT) {
+      // We remove all locals at this depth.
+      while (current->localCount > 0 &&
+             current->locals[current->localCount - 1].depth >=
+                 current->scopeDepth) {
+        emitByte(OP_POP);
+      }
+    } else {
+      // This is an edge case, since the 'continue' statement doesn't refer to a
+      // switch statement but rahter to the innermost 'while' or 'for' loop and
+      // since we do not jump to the end of the statement where it is
+      // destructed, we want to pop the condition of the 'switch' statement.
+      if (enclosingContext == SWITCH_STATEMENT && interruptorType == CONTINUE) {
+        emitByte(OP_POP); // 'switch' condition.
+      }
+
+      break;
+    }
+  };
+}
+
 static void expression();
-static void statement();
-static void declaration();
+static Interruptors statement();
+static Interruptors declaration();
 static ParseRule *getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
 
@@ -471,16 +591,24 @@ ParseRule rules[] = {
     [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
+    [TOKEN_BREAK] = {NULL, NULL, PREC_NONE},
+    [TOKEN_CONTINUE] = {NULL, NULL, PREC_NONE},
 };
 
 static void expression() { parsePrecedence(PREC_ASSIGNMENT); }
 
-static void block() {
+static Interruptors block() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
-    declaration();
+    interruptors = mergeInterruptors(interruptors, declaration());
   }
 
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+
+  // The block statement doesn't "capture" any interruptors, thus we forward
+  // them upstream.
+  return interruptors;
 }
 
 static void varDeclaration() {
@@ -502,7 +630,9 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
-static void switchCaseExpression(bool is_default_case) {
+static Interruptors switchCaseExpression(bool is_default_case) {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   if (!is_default_case) {
     expression();
   }
@@ -514,7 +644,7 @@ static void switchCaseExpression(bool is_default_case) {
     emitByte(OP_POP); // Condition.
     emitByte(OP_POP); // Case expression.
 
-    statement();
+    interruptors = statement();
 
     int skipJump = emitJump(OP_JUMP);
     patchJump(nextCaseJump);
@@ -523,31 +653,49 @@ static void switchCaseExpression(bool is_default_case) {
 
     patchJump(skipJump);
   } else {
-    statement();
+    interruptors = statement();
   }
+
+  return interruptors;
 }
 
-static void switchStatement() {
+static Interruptors switchStatement() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
   consume(TOKEN_LEFT_BRACE, "Expect '{' after 'switch' condition.");
 
-  // COLLECT ALL INDEXES OF BREAK STATEMENTS WHICH ARE JUST JUMPS
-  ValueArray breakJumps;
-  initValueArray(&breakJumps);
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
     if (match(TOKEN_CASE)) {
-      switchCaseExpression(false);
+      interruptors =
+          mergeInterruptors(interruptors, switchCaseExpression(false));
     } else if (match(TOKEN_DEFAULT)) {
-      switchCaseExpression(true);
+      interruptors =
+          mergeInterruptors(interruptors, switchCaseExpression(true));
     }
   }
 
-  // PATCH EACH JUMP
-
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after 'switch' statement.");
+
+  // We forward the 'continue' interruptor upstream since it's not supported by
+  // the 'switch' statement.
+  Interruptors unsupportedInterruptors = NO_INTERRUPTORS;
+  for (int i = 0; i < interruptors.count; i++) {
+    Interruptor interruptor = interruptors.interruptors[i];
+    if (interruptor.type == BREAK) {
+      patchJump(interruptor.position);
+    } else if (interruptor.type == CONTINUE) {
+      unsupportedInterruptors.interruptors[unsupportedInterruptors.count++] =
+          interruptor;
+    }
+  }
+
+  emitByte(OP_POP); // Condition.
+
+  return unsupportedInterruptors;
 }
 
 static void forStatement() {
@@ -586,8 +734,19 @@ static void forStatement() {
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
   }
 
-  statement();
+  Interruptors interruptors = statement();
   emitLoop(loopStart);
+
+  // We now patch all the jumps and loops that were defined via interruptor
+  // statements.
+  for (int i = 0; i < interruptors.count; i++) {
+    Interruptor interruptor = interruptors.interruptors[i];
+    if (interruptor.type == BREAK) {
+      patchJump(interruptor.position);
+    } else if (interruptor.type == CONTINUE) {
+      patchLoop(interruptor.position, loopStart);
+    }
+  }
 
   if (exitJump != -1) {
     patchJump(exitJump);
@@ -597,24 +756,31 @@ static void forStatement() {
   endScope();
 }
 
-static void ifStatement() {
+static Interruptors ifStatement() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
   int thenJump = emitJump(OP_JUMP_IF_FALSE);
-  emitByte(OP_POP);
-  statement();
+  emitByte(OP_POP); // Condition.
+
+  interruptors = statement();
 
   int elseJump = emitJump(OP_JUMP);
 
   patchJump(thenJump);
-  emitByte(OP_POP);
+  emitByte(OP_POP); // Condition.
 
   if (match(TOKEN_ELSE)) {
-    statement();
+    interruptors = mergeInterruptors(interruptors, statement());
   }
   patchJump(elseJump);
+
+  // The 'if' statement doesn't "capture" any interruptors, thus we forward them
+  // upstream.
+  return interruptors;
 }
 
 static void printStatement() {
@@ -630,12 +796,24 @@ static void whileStatement() {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
   int exitJump = emitJump(OP_JUMP_IF_FALSE);
-  emitByte(OP_POP);
-  statement();
+  emitByte(OP_POP); // Condition.
+
+  Interruptors interruptors = statement();
   emitLoop(loopStart);
 
+  // We now patch all the jumps and loops that were defined via interruptor
+  // statements.
+  for (int i = 0; i < interruptors.count; i++) {
+    Interruptor interruptor = interruptors.interruptors[i];
+    if (interruptor.type == BREAK) {
+      patchJump(interruptor.position);
+    } else if (interruptor.type == CONTINUE) {
+      patchLoop(interruptor.position, loopStart);
+    }
+  }
+
   patchJump(exitJump);
-  emitByte(OP_POP);
+  emitByte(OP_POP); // Condition.
 }
 
 static void synchronize() {
@@ -646,6 +824,7 @@ static void synchronize() {
       return;
 
     switch (parser.current.type) {
+    case TOKEN_SWITCH:
     case TOKEN_CLASS:
     case TOKEN_FUN:
     case TOKEN_VAR:
@@ -663,36 +842,79 @@ static void synchronize() {
   }
 }
 
-static void declaration() {
+static Interruptors declaration() {
+  Interruptors interruptors = NO_INTERRUPTORS;
   if (match(TOKEN_VAR)) {
     varDeclaration();
   } else {
-    statement();
+    interruptors = statement();
   }
 
   if (parser.panicMode) {
     synchronize();
   }
+
+  return interruptors;
 }
 
-static void statement() {
+static Interruptors interruptorStatement(InterruptorType interruptorType) {
+  consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
+
+  // We check whether the interruptor can be defined consider the enclosing
+  // contexts.
+  validateInterruptor(interruptorType);
+
+  // For each enclosing context, we emit the byte code necessary to correclty
+  // unwind.
+  unwindEnclosingContexts(interruptorType);
+
+  Interruptors interruptors = NO_INTERRUPTORS;
+  if (interruptorType == BREAK) {
+    interruptors =
+        BUILD_INTERRUPTORS({BREAK_INTERRUPTOR(emitJump(OP_JUMP))}, 1);
+  } else if (interruptorType == CONTINUE) {
+    interruptors = BUILD_INTERRUPTORS({CONTINUE_INTERRUPTOR(emitLoop(-1))}, 1);
+  }
+
+  return interruptors;
+}
+
+static Interruptors statement() {
+  Interruptors interruptors = NO_INTERRUPTORS;
+
   if (match(TOKEN_PRINT)) {
     printStatement();
   } else if (match(TOKEN_FOR)) {
+    addEnclosingContext(FOR_STATEMENT);
     forStatement();
+    removeEnclosingContext();
   } else if (match(TOKEN_IF)) {
-    ifStatement();
+    addEnclosingContext(IF_STATEMENT);
+    interruptors = ifStatement();
+    removeEnclosingContext();
   } else if (match(TOKEN_WHILE)) {
+    addEnclosingContext(WHILE_STATEMENT);
     whileStatement();
+    removeEnclosingContext();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
-    block();
+    addEnclosingContext(BLOCK_STATEMENT);
+    interruptors = block();
+    removeEnclosingContext();
     endScope();
   } else if (match(TOKEN_SWITCH)) {
-    switchStatement();
+    addEnclosingContext(SWITCH_STATEMENT);
+    interruptors = switchStatement();
+    removeEnclosingContext();
+  } else if (match(TOKEN_BREAK)) {
+    interruptors = interruptorStatement(BREAK);
+  } else if (match(TOKEN_CONTINUE)) {
+    interruptors = interruptorStatement(CONTINUE);
   } else {
     expressionStatement();
   }
+
+  return interruptors;
 }
 
 static ParseRule *getRule(TokenType type) { return &rules[type]; }

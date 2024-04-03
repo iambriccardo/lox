@@ -1,5 +1,4 @@
 #include <stdbool.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "scanner.h"
@@ -101,6 +100,8 @@ static TokenType identifierType() {
   switch (scanner.start[0]) {
   case 'a':
     return checkKeyword(1, 2, "nd", TOKEN_AND);
+  case 'b':
+    return checkKeyword(1, 4, "reak", TOKEN_BREAK);
   case 'c':
     if (scanner.current - scanner.start > 1) {
       switch (scanner.start[1]) {
@@ -108,6 +109,8 @@ static TokenType identifierType() {
         return checkKeyword(2, 2, "se", TOKEN_CASE);
       case 'l':
         return checkKeyword(2, 3, "ass", TOKEN_CLASS);
+      case 'o':
+        return checkKeyword(2, 6, "ntinue", TOKEN_CONTINUE);
       }
     }
     break;

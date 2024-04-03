@@ -1,2 +1,3 @@
 lox-c/*.o
 lox-c/clox
+/lox-c/main.lox
