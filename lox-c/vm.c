@@ -253,21 +253,15 @@ void freeVM() {
 }
 
 InterpretResult interpret(const char *source) {
-  Chunk chunk;
-  initChunk(&chunk);
-
-  if (!compile(source, &chunk)) {
-    freeChunk(&chunk);
+  ObjFunction *function = compile(source);
+  if (function == NULL) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  vm.chunk = &chunk;
+  vm.chunk = &function->chunk;
   vm.ip = vm.chunk->code;
 
-  InterpretResult result = run();
-
-  freeChunk(&chunk);
-  return result;
+  return run();
 }
 
 void push(Value value) {
