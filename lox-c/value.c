@@ -79,7 +79,8 @@ uint32_t valueHash(Value value) {
       ObjString *objString = AS_STRING(value);
       return objString->hash;
     }
-    // TODO: we have to implement hashing for other object types.
+    // TODO: we have to implement hashing for other object types that we want to
+    // allow as keys.
     return 0;
   }
   default:

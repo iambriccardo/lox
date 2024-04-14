@@ -31,8 +31,9 @@ static Entry *findEntry(Entry *entries, int capacity, Value key) {
         return tombstone != NULL ? tombstone : entry;
       } else {
         // We found a tombstone.
-        if (tombstone == NULL)
+        if (tombstone == NULL) {
           tombstone = entry;
+        }
       }
     } else if (valuesEqual(entry->key, key)) {
       // We found the key.
@@ -53,8 +54,9 @@ static void adjustCapacity(Table *table, int capacity) {
   table->count = 0;
   for (int i = 0; i < table->capacity; i++) {
     Entry *entry = &table->entries[i];
-    if (IS_NIL(entry->key))
+    if (IS_NIL(entry->key)) {
       continue;
+    }
 
     Entry *dest = findEntry(entries, capacity, entry->key);
     dest->key = entry->key;
@@ -74,9 +76,10 @@ bool tableSet(Table *table, Value key, Value value) {
   }
 
   Entry *entry = findEntry(table->entries, table->capacity, key);
-  bool isNewKey = IS_NIL(entry->value);
-  if (isNewKey && IS_NIL(entry->value))
+  bool isNewKey = IS_NIL(entry->key);
+  if (isNewKey && IS_NIL(entry->value)) {
     table->count++;
+  }
 
   entry->key = key;
   entry->value = value;
@@ -89,8 +92,9 @@ bool tableDelete(Table *table, Value key) {
 
   // Find the entry.
   Entry *entry = findEntry(table->entries, table->capacity, key);
-  if (IS_NIL(entry->key))
+  if (IS_NIL(entry->key)) {
     return false;
+  }
 
   // Place a tombstone in the entry.
   Value nilValue;
@@ -105,8 +109,9 @@ bool tableGet(Table *table, Value key, Value *value) {
     return false;
 
   Entry *entry = findEntry(table->entries, table->capacity, key);
-  if (IS_NIL(entry->key))
+  if (IS_NIL(entry->key)) {
     return false;
+  }
 
   *value = entry->value;
   return true;
@@ -123,16 +128,18 @@ void tableAddAll(Table *from, Table *to) {
 
 ObjString *tableFindString(Table *table, const char *chars, int length,
                            uint32_t hash) {
-  if (table->count == 0)
+  if (table->count == 0) {
     return NULL;
+  }
 
   uint32_t index = hash % table->capacity;
   for (;;) {
     Entry *entry = &table->entries[index];
     if (IS_NIL(entry->key)) {
       // Stop if we find an empty non-tombstone entry.
-      if (IS_NIL(entry->value))
+      if (IS_NIL(entry->value)) {
         return NULL;
+      }
     } else if (IS_STRING(entry->key)) {
       ObjString *objString = AS_STRING(entry->key);
       if (objString->length == length && valueHash(entry->key) == hash &&
