@@ -120,11 +120,12 @@ static void concatenate() {
 
 static InterpretResult run() {
   CallFrame *frame = &vm.frames[vm.frameCount - 1];
+  register uint8_t *frame_ip = frame->ip;
 
-#define READ_BYTE() (*frame->ip++)
+#define READ_BYTE() (*frame_ip++)
 
 #define READ_SHORT()                                                           \
-  (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
+  (frame_ip += 2, (uint16_t)((frame_ip[-2] << 8) | frame_ip[-1]))
 
 #define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 
@@ -154,7 +155,7 @@ static InterpretResult run() {
     }
     printf("\n");
     disassembleInstruction(&frame->function->chunk,
-                           (int)(frame->ip - frame->function->chunk.code));
+                           (int)(frame_ip - frame->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -284,27 +285,32 @@ static InterpretResult run() {
     }
     case OP_JUMP: {
       uint16_t offset = READ_SHORT();
-      frame->ip += offset;
+      frame_ip += offset;
       break;
     }
     case OP_JUMP_IF_FALSE: {
       uint16_t offset = READ_SHORT();
       if (isFalsey(peek(0))) {
-        frame->ip += offset;
+        frame_ip += offset;
       }
       break;
     }
     case OP_LOOP: {
       uint16_t offset = READ_SHORT();
-      frame->ip -= offset;
+      frame_ip -= offset;
       break;
     }
     case OP_CALL: {
       int argCount = READ_BYTE();
+      // Before entering a new function, we want to save the last ip to the call
+      // frame since during runtime we update it via the register.
+      vm.frames[vm.frameCount - 1].ip = frame_ip;
+
       if (!callValue(peek(argCount), argCount)) {
         return INTERPRET_RUNTIME_ERROR;
       }
       frame = &vm.frames[vm.frameCount - 1];
+      frame_ip = frame->ip;
       break;
     }
     case OP_RETURN: {
@@ -318,6 +324,7 @@ static InterpretResult run() {
       vm.stackTop = frame->slots;
       push(result);
       frame = &vm.frames[vm.frameCount - 1];
+      frame_ip = frame->ip;
       break;
     }
     }
