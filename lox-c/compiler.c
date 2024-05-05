@@ -124,7 +124,6 @@ static void advance() {
 
   for (;;) {
     parser.current = scanToken();
-    printf("'%.*s'\n", parser.current.length, parser.current.start);
     if (parser.current.type != TOKEN_ERROR)
       break;
 
@@ -186,7 +185,10 @@ static int emitJump(uint8_t instruction) {
   return currentChunk()->count - 2;
 }
 
-static void emitReturn() { emitByte(OP_RETURN); }
+static void emitReturn() {
+  emitByte(OP_NIL);
+  emitByte(OP_RETURN);
+}
 
 static uint8_t makeConstant(Value value) {
   int constant = addConstant(currentChunk(), value);
@@ -869,6 +871,20 @@ static void printStatement() {
   emitByte(OP_PRINT);
 }
 
+static void returnStatement() {
+  if (current->type == TYPE_SCRIPT) {
+    errorAtCurrent("Can't return from top-level code.");
+  }
+
+  if (match(TOKEN_SEMICOLON)) {
+    emitReturn();
+  } else {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after return value.");
+    emitByte(OP_RETURN);
+  }
+}
+
 static void whileStatement() {
   int loopStart = currentChunk()->count;
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
@@ -974,6 +990,8 @@ static Interruptors statement() {
     addEnclosingContext(IF_STATEMENT);
     interruptors = ifStatement();
     removeEnclosingContext();
+  } else if (match(TOKEN_RETURN)) {
+    returnStatement();
   } else if (match(TOKEN_WHILE)) {
     addEnclosingContext(WHILE_STATEMENT);
     whileStatement();
