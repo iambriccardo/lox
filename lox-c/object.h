@@ -38,6 +38,7 @@ struct Obj {
 struct ObjFunction {
   Obj obj;
   int arity;
+  int upvalueCount;
   Chunk chunk;
   ObjString *name;
 };
