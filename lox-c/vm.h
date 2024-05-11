@@ -26,6 +26,7 @@ typedef struct {
   Table globals;
   // Table of the interned strings.
   Table strings;
+  ObjUpvalue *openUpvalues;
   Obj *objects;
 } VM;
 
