@@ -13,6 +13,7 @@
 static Obj *allocateObject(size_t size, ObjType type) {
   Obj *object = (Obj *)reallocate(NULL, 0, size);
   object->type = type;
+  object->isMarked = false;
 
   object->next = vm.objects;
   vm.objects = object;
@@ -34,6 +35,7 @@ ObjClosure *newClosure(ObjFunction *function) {
   closure->function = function;
   closure->upvalues = upvalues;
   closure->upvalueCount = function->upvalueCount;
+
   return closure;
 }
 
@@ -54,12 +56,12 @@ ObjNative *newNative(NativeFn function) {
 }
 
 static ObjString *allocateString(char chars[], int length, uint32_t hash) {
-  ObjString *string = (ObjString *)allocateObject(
-      sizeof(ObjString) + sizeof(char[length]), OBJ_STRING);
-  string->start = NULL;
+  ObjString *string =
+      (ObjString *)allocateObject(sizeof(ObjString) + length + 1, OBJ_STRING);
   string->hash = hash;
   string->length = length;
   strcpy(string->chars, chars);
+  string->chars[length] = '\0'; // Null-terminate the string
 
   tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
 
