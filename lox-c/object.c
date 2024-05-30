@@ -57,11 +57,12 @@ ObjNative *newNative(NativeFn function) {
 
 static ObjString *allocateString(char chars[], int length, uint32_t hash) {
   ObjString *string =
-      (ObjString *)allocateObject(sizeof(ObjString) + length + 1, OBJ_STRING);
+      (ObjString *)allocateObject(sizeof(ObjString) + length, OBJ_STRING);
   string->hash = hash;
   string->length = length;
+
+  // For a copied string we use a flexible array member.
   strcpy(string->chars, chars);
-  string->chars[length] = '\0'; // Null-terminate the string
 
   tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
 
@@ -72,9 +73,12 @@ static ObjString *allocateReferenceString(const char *start, int length,
                                           uint32_t hash) {
   ObjString *string =
       (ObjString *)allocateObject(sizeof(ObjString), OBJ_STRING);
-  string->start = start;
   string->hash = hash;
   string->length = length;
+
+  // For a reference string we just point to the area of memory where the code
+  // is located.
+  string->start = start;
 
   tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
 
@@ -93,8 +97,9 @@ static uint32_t hashString(const char *key, int length) {
 ObjString *takeString(char chars[], int length) {
   uint32_t hash = hashString(chars, length);
   ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
-  if (interned != NULL)
+  if (interned != NULL) {
     return interned;
+  }
 
   return allocateString(chars, length, hash);
 }
@@ -109,7 +114,18 @@ ObjString *copyString(const char chars[], int length) {
   char *heapChars = ALLOCATE(char, length + 1);
   memcpy(heapChars, chars, length);
   heapChars[length] = '\0';
+
   return allocateString(heapChars, length, hash);
+}
+
+ObjString *referenceString(const char *start, int length) {
+  uint32_t hash = hashString(start, length);
+  ObjString *interned = tableFindString(&vm.strings, start, length, hash);
+  if (interned != NULL) {
+    return interned;
+  }
+
+  return allocateReferenceString(start, length, hash);
 }
 
 ObjUpvalue *newUpvalue(Value *slot) {
@@ -126,15 +142,6 @@ static void printFunction(ObjFunction *function) {
     return;
   }
   printf("<fn %s>", function->name->chars);
-}
-
-ObjString *referenceString(const char *start, int length) {
-  uint32_t hash = hashString(start, length);
-  ObjString *interned = tableFindString(&vm.strings, start, length, hash);
-  if (interned != NULL)
-    return interned;
-
-  return allocateReferenceString(start, length, hash);
 }
 
 void printObject(Value value) {

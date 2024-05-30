@@ -3,6 +3,7 @@
 #include "compiler.h"
 #include "memory.h"
 #include "object.h"
+#include "table.h"
 #include "value.h"
 #include "vm.h"
 
@@ -93,9 +94,10 @@ static void blackenObject(Obj *object) {
     markArray(&function->chunk.constants);
     break;
   }
-  case OBJ_UPVALUE:
+  case OBJ_UPVALUE: {
     markValue(((ObjUpvalue *)object)->closed);
     break;
+  }
   case OBJ_NATIVE:
   case OBJ_STRING:
     break;
@@ -126,7 +128,7 @@ static void freeObject(Obj *object) {
   }
   case OBJ_STRING: {
     ObjString *string = (ObjString *)object;
-    reallocate(object, sizeof(ObjString) + string->length + 1, 0);
+    reallocate(object, sizeof(ObjString) + string->length, 0);
     break;
   }
   case OBJ_UPVALUE: {
