@@ -157,7 +157,7 @@ void tableRemoveWhite(Table *table) {
   for (int i = 0; i < table->capacity; i++) {
     Entry *entry = &table->entries[i];
     Obj *object = AS_OBJ(entry->key);
-    if (!IS_NIL(entry->key) && object != NULL && !object->isMarked) {
+    if (object != NULL && !object->isMarked) {
       tableDelete(table, entry->key);
     }
   }
