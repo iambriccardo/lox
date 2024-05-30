@@ -158,7 +158,6 @@ void tableRemoveWhite(Table *table) {
     Entry *entry = &table->entries[i];
     Obj *object = AS_OBJ(entry->key);
     if (!IS_NIL(entry->key) && object != NULL && !object->isMarked) {
-      printValue(entry->key);
       tableDelete(table, entry->key);
     }
   }
