@@ -27,6 +27,9 @@ typedef struct {
   // Table of the interned strings.
   Table strings;
   ObjUpvalue *openUpvalues;
+
+  size_t bytesAllocated;
+  size_t nextGC;
   Obj *objects;
   int grayCount;
   int grayCapacity;

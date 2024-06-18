@@ -64,7 +64,9 @@ static ObjString *allocateString(char chars[], int length, uint32_t hash) {
   // For a copied string we use a flexible array member.
   strcpy(string->chars, chars);
 
+  push(OBJ_VAL(string));
   tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
+  pop();
 
   return string;
 }

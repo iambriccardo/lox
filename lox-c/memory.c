@@ -13,10 +13,15 @@
 #endif
 
 void *reallocate(void *pointer, size_t oldSize, size_t newSize) {
+  vm.bytesAllocated += newSize - oldSize;
   if (newSize > oldSize) {
 #ifdef DEBUG_STRESS_GC
     collectGarbage();
 #endif
+
+    if (vm.bytesAllocated > vm.nextGC) {
+      collectGarbage();
+    }
   }
 
   if (newSize == 0) {
@@ -197,8 +202,13 @@ void collectGarbage() {
   tableRemoveWhite(&vm.strings);
   sweep();
 
+  vm.nextGC = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
+
 #ifdef DEBUG_LOG_GC
   printf("-- gc end\n");
+  size_t before = vm.bytesAllocated;
+  printf("   collected %zu bytes (from %zu to %zu) next at %zu\n",
+         before - vm.bytesAllocated, before, vm.bytesAllocated, vm.nextGC);
 #endif
 }
 
