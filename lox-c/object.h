@@ -32,7 +32,7 @@ typedef enum {
 
 struct Obj {
   ObjType type;
-  bool isMarked;
+  unsigned int foundAtState : 1;
   // Field used to keep track of all allocated objects.
   struct Obj *next;
 };

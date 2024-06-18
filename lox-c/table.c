@@ -6,6 +6,7 @@
 #include "object.h"
 #include "table.h"
 #include "value.h"
+#include "vm.h"
 
 #define TABLE_MAX_LOAD 0.75
 
@@ -157,7 +158,7 @@ void tableRemoveWhite(Table *table) {
   for (int i = 0; i < table->capacity; i++) {
     Entry *entry = &table->entries[i];
     Obj *object = AS_OBJ(entry->key);
-    if (object != NULL && !object->isMarked) {
+    if (object != NULL && object->foundAtState != vm.gcState) {
       tableDelete(table, entry->key);
     }
   }

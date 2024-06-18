@@ -41,7 +41,7 @@ void markObject(Obj *object) {
   if (object == NULL) {
     return;
   }
-  if (object->isMarked) {
+  if (vm.gcState == object->foundAtState) {
     return;
   }
 #ifdef DEBUG_LOG_GC
@@ -50,7 +50,7 @@ void markObject(Obj *object) {
   printf("\n");
 #endif
 
-  object->isMarked = true;
+  object->foundAtState = vm.gcState;
 
   if (vm.grayCapacity < vm.grayCount + 1) {
     vm.grayCapacity = GROW_CAPACITY(vm.grayCapacity);
@@ -174,11 +174,23 @@ static void sweep() {
   Obj *previous = NULL;
   Obj *object = vm.objects;
   while (object != NULL) {
-    if (object->isMarked) {
-      object->isMarked = false;
-      previous = object;
-      object = object->next;
-    } else {
+    // If the object was found at a different state than the one of the current
+    // garbage collection, it means we didn't find it.
+    //
+    // It's VERY that at each iteration, we deallocate all unreachable objects,
+    // otherwise the next next state (since it will be circular) will consider
+    // the object as reachable.
+    //
+    // E.g.
+    // We have A and B, both of them reachable at state 0
+    // In the next collection with state 1 A is reachable and B not, so we have
+    // A 1 and B 0 B is not deallocated even if the state is != from the
+    // collection state In the next collection with state 0 A is reachable and B
+    // not, so we have A 0 and B 0 Now both A and B are considered reachable
+    // even though B is not, which means it will never be freed.
+    // To solve this, the state could be a monotonically increasing integer but
+    // we can assume freeing happens correctly.
+    if (object->foundAtState != vm.gcState) {
       Obj *unreached = object;
       object = object->next;
       if (previous != NULL) {
@@ -188,6 +200,9 @@ static void sweep() {
       }
 
       freeObject(unreached);
+    } else {
+      previous = object;
+      object = object->next;
     }
   }
 }
@@ -203,6 +218,11 @@ void collectGarbage() {
   sweep();
 
   vm.nextGC = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
+  if (vm.gcState == 0) {
+    vm.gcState = 1;
+  } else if (vm.gcState == 1) {
+    vm.gcState = 0;
+  }
 
 #ifdef DEBUG_LOG_GC
   printf("-- gc end\n");

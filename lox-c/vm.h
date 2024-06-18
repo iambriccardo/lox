@@ -28,6 +28,7 @@ typedef struct {
   Table strings;
   ObjUpvalue *openUpvalues;
 
+  unsigned int gcState : 1;
   size_t bytesAllocated;
   size_t nextGC;
   Obj *objects;

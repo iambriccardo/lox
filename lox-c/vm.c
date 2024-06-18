@@ -408,6 +408,10 @@ static InterpretResult run() {
 
 void initVM() {
   resetStack();
+  // We have to set this value to the opposite of the default value of
+  // Obj.foundAtState, otherwise we will consider all objects as reachable
+  // immediately.
+  vm.gcState = 1;
   vm.bytesAllocated = 0;
   vm.nextGC = 1024 * 1024;
   vm.objects = NULL;
